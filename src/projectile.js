@@ -13,6 +13,8 @@ export class Projectile {
     this.traveled = 0;
     this.range = range;
     this.damage = damage;
+    this.damageNear = opts.damageNear !== undefined ? opts.damageNear : damage;
+    this.damageFar = opts.damageFar !== undefined ? opts.damageFar : damage;
     this.big = !!big;
     this.ghost = !!ghost;
     this.dead = false;
@@ -43,6 +45,12 @@ export class Projectile {
     scene.add(this.mesh);
   }
 
+  currentDamage() {
+    if (this.damageNear === this.damageFar) return this.damage;
+    const t = Math.max(0, Math.min(1, this.traveled / Math.max(this.range, 0.001)));
+    return Math.round(this.damageNear + (this.damageFar - this.damageNear) * t);
+  }
+
   update(dt, world, ps, player) {
     for (let s = 0; s < 2; s++) {
       const dx = this.vx * dt * 0.5;
@@ -61,7 +69,7 @@ export class Projectile {
         if (Math.hypot(this.x - this.targetPlayer.x, this.z - this.targetPlayer.z) <= hitRadius) {
           this.hitPlayer = true;
           if (this.onHitPlayer) {
-            this.onHitPlayer(this.damage, { x: this.x, y: this.y, z: this.z }, this);
+            this.onHitPlayer(this.currentDamage(), { x: this.x, y: this.y, z: this.z }, this);
           }
           if (!this.pierce) {
             this.kill(world.scene);
@@ -74,7 +82,7 @@ export class Projectile {
         for (const o of world.blockers) {
           if (o.alive === false) continue;
           if (pointInRectXZ(this.x, this.z, o.bounds)) {
-            const res = o.hit({ x: this.x, y: this.y, z: this.z }, ps, this.damage);
+            const res = o.hit({ x: this.x, y: this.y, z: this.z }, ps, this.currentDamage());
             if (res && player) player.gainSuper(this.superGain || res.superGain);
             if (!this.pierce) {
               this.kill(world.scene);

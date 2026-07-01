@@ -37,9 +37,9 @@ scene.fog = new THREE.Fog(COLORS.fog, 26, 46);
 const target = new THREE.Vector3(ARENA_W / 2, 0, ARENA_D / 2);
 const ELEV = THREE.MathUtils.degToRad(55);
 const AZ = THREE.MathUtils.degToRad(28);
-const DIST = 22;
+const DIST = 30;
 
-const VIEW_SIZE = 8.6;
+const VIEW_SIZE = 13.2;
 const camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, 100);
 camera.position.set(
   target.x + DIST * Math.cos(ELEV) * Math.sin(AZ),
@@ -78,12 +78,12 @@ sun.position.set(target.x + 10, 18, target.z + 6);
 sun.target.position.copy(target);
 sun.castShadow = true;
 sun.shadow.mapSize.set(2048, 2048);
-sun.shadow.camera.left = -18;
-sun.shadow.camera.right = 18;
-sun.shadow.camera.top = 14;
-sun.shadow.camera.bottom = -14;
+sun.shadow.camera.left = -28;
+sun.shadow.camera.right = 28;
+sun.shadow.camera.top = 24;
+sun.shadow.camera.bottom = -24;
 sun.shadow.camera.near = 1;
-sun.shadow.camera.far = 46;
+sun.shadow.camera.far = 60;
 sun.shadow.bias = -0.0015;
 scene.add(sun);
 scene.add(sun.target);
@@ -118,6 +118,9 @@ let selectedBrawlerId = DEFAULT_BRAWLER_ID;
 let player = null;
 let projectiles = [];
 let effects = [];
+const previewGroup = new THREE.Group();
+previewGroup.visible = false;
+scene.add(previewGroup);
 let state = 'menu';
 let shakeTimer = 0;
 let netSendTimer = 0;
@@ -169,11 +172,17 @@ function updateBrawlerSummary() {
 renderBrawlerCards();
 
 function spawnPointFor(slot) {
-  const angle = (slot / 8) * Math.PI * 2;
-  return {
-    x: ARENA_W / 2 + Math.cos(angle) * 3.4,
-    z: ARENA_D / 2 + Math.sin(angle) * 3.4
-  };
+  const points = [
+    { x: 2.0, z: 2.0 },
+    { x: ARENA_W - 2.0, z: ARENA_D - 2.0 },
+    { x: ARENA_W - 2.0, z: 2.0 },
+    { x: 2.0, z: ARENA_D - 2.0 },
+    { x: ARENA_W / 2, z: 2.0 },
+    { x: ARENA_W / 2, z: ARENA_D - 2.0 },
+    { x: 2.0, z: ARENA_D / 2 },
+    { x: ARENA_W - 2.0, z: ARENA_D / 2 }
+  ];
+  return points[slot % points.length];
 }
 
 function aimTarget(maxRange) {
@@ -185,6 +194,119 @@ function aimTarget(maxRange) {
     x: clamp(player.x + (dx / dist) * limited, 0.6, ARENA_W - 0.6),
     z: clamp(player.z + (dz / dist) * limited, 0.6, ARENA_D - 0.6)
   };
+}
+
+function clearPreview() {
+  while (previewGroup.children.length) {
+    const child = previewGroup.children.pop();
+    child.traverse(obj => {
+      if (obj.geometry) obj.geometry.dispose();
+      if (obj.material) obj.material.dispose();
+    });
+  }
+}
+
+function previewMaterial(color, opacity = 0.25) {
+  return new THREE.MeshBasicMaterial({ color, transparent: true, opacity, depthWrite: false, side: THREE.DoubleSide });
+}
+
+function addCirclePreview(x, z, radius, color, opacity = 0.24) {
+  const geo = new THREE.CircleGeometry(radius, 48);
+  const mesh = new THREE.Mesh(geo, previewMaterial(color, opacity));
+  mesh.rotation.x = -Math.PI / 2;
+  mesh.position.set(x, 0.035, z);
+  previewGroup.add(mesh);
+
+  const ring = new THREE.LineLoop(
+    new THREE.BufferGeometry().setFromPoints(Array.from({ length: 64 }, (_, i) => {
+      const a = (i / 64) * Math.PI * 2;
+      return new THREE.Vector3(x + Math.cos(a) * radius, 0.052, z + Math.sin(a) * radius);
+    })),
+    new THREE.LineBasicMaterial({ color, transparent: true, opacity: 0.9 })
+  );
+  previewGroup.add(ring);
+}
+
+function addConePreview(x, z, angle, range, arc, color) {
+  const shape = new THREE.Shape();
+  shape.moveTo(0, 0);
+  const steps = 32;
+  for (let i = 0; i <= steps; i++) {
+    const a = -arc / 2 + (arc * i) / steps;
+    shape.lineTo(Math.sin(a) * range, -Math.cos(a) * range);
+  }
+  shape.lineTo(0, 0);
+  const geo = new THREE.ShapeGeometry(shape);
+  const mesh = new THREE.Mesh(geo, previewMaterial(color, 0.22));
+  mesh.rotation.x = -Math.PI / 2;
+  mesh.rotation.z = -angle;
+  mesh.position.set(x, 0.04, z);
+  previewGroup.add(mesh);
+}
+
+function addLinePreview(x, z, angle, range, width, color) {
+  const geo = new THREE.BoxGeometry(width, 0.02, range);
+  const mesh = new THREE.Mesh(geo, previewMaterial(color, 0.23));
+  mesh.position.set(
+    x + Math.sin(angle) * range * 0.5,
+    0.045,
+    z + Math.cos(angle) * range * 0.5
+  );
+  mesh.rotation.y = angle;
+  previewGroup.add(mesh);
+}
+
+function showAttackPreview(mode = 'basic') {
+  if (!player || !input.keys.has('shift')) {
+    previewGroup.visible = false;
+    clearPreview();
+    return;
+  }
+
+  clearPreview();
+  previewGroup.visible = true;
+  const b = player.brawler;
+  const angle = player.aimAngle;
+  const x = player.x;
+  const z = player.z;
+  const color = b.accent;
+
+  if (mode === 'super') {
+    if (b.id === 'joao') {
+      const t = aimTarget(9.4);
+      addCirclePreview(t.x, t.z, 1.15, color, 0.3);
+    } else if (b.id === 'luan') {
+      addLinePreview(x, z, angle, 3.4, 1.9, color);
+      addCirclePreview(x + Math.sin(angle) * 3.4, z + Math.cos(angle) * 3.4, 0.95, color, 0.18);
+    } else if (b.id === 'djonga') {
+      const t = aimTarget(5.8);
+      addCirclePreview(t.x, t.z, 1.35, color, 0.28);
+    } else if (b.id === 'thomas') {
+      addCirclePreview(x, z, 2.2, color, 0.2);
+    } else if (b.id === 'gui') {
+      addLinePreview(x, z, angle, 11.5, 0.9, color);
+    } else if (b.id === 'lorenzo') {
+      const t = aimTarget(5.4);
+      addCirclePreview(t.x, t.z, 1.45, color, 0.24);
+      addCirclePreview(t.x, t.z, 3.2, color, 0.1);
+    } else if (b.id === 'ministro') {
+      const t = aimTarget(8.8);
+      addCirclePreview(t.x, t.z, 1.35, color, 0.28);
+    }
+    return;
+  }
+
+  if (b.id === 'joao') addLinePreview(x, z, angle, 8.2, 0.55, color);
+  else if (b.id === 'luan') addConePreview(x, z, angle, 1.85, 1.25, color);
+  else if (b.id === 'djonga') addConePreview(x, z, angle, 1.35, 0.95, color);
+  else if (b.id === 'thomas') addConePreview(x, z, angle, 8.5, 0.58, color);
+  else if (b.id === 'gui') {
+    addLinePreview(x, z, angle, 6.4, 0.75, color);
+    const splitX = x + Math.sin(angle) * 6.4;
+    const splitZ = z + Math.cos(angle) * 6.4;
+    addConePreview(splitX, splitZ, angle, 4.8, 0.92, color);
+  } else if (b.id === 'lorenzo') addConePreview(x, z, angle, 7.8, 1.25, color);
+  else if (b.id === 'ministro') addLinePreview(x, z, angle, 12.5, 0.5, color);
 }
 
 function pointSegmentDistance(px, pz, ax, az, bx, bz) {
@@ -362,8 +484,30 @@ function addProjectile(data, ghost = false) {
       glowSize: data.glowSize,
       pierce: data.pierce,
       superGain: data.superGain,
+      damageNear: data.damageNear,
+      damageFar: data.damageFar,
       targetPlayer: ghost ? player : null,
-      onHitPlayer: ghost ? ((damage, point) => applyIncomingDamage(damage, point, data)) : null
+      onHitPlayer: ghost ? ((damage, point) => applyIncomingDamage(damage, point, data)) : null,
+      onExpire: (!ghost && data.split) ? ((point) => {
+        const b = getBrawler(data.brawlerId);
+        for (const off of [-0.46, -0.28, -0.12, 0.12, 0.28, 0.46]) {
+          fireEvent({
+            kind: 'projectile',
+            brawlerId: data.brawlerId,
+            x: point.x,
+            y: point.y,
+            z: point.z,
+            angle: data.angle + off,
+            color: data.splitColor || b.accent,
+            speed: data.splitSpeed || 12,
+            range: data.splitRange || 4.8,
+            damage: data.splitDamage || 4,
+            size: data.splitSize || 0.06,
+            glowSize: data.splitGlowSize || 0.14,
+            superGain: data.splitSuperGain || 4
+          });
+        }
+      }) : null
     }
   ));
 }
@@ -381,6 +525,8 @@ function projectileAtTip(angle, brawler, params = {}) {
     speed: params.speed ?? 13,
     range: params.range ?? 8,
     damage: params.damage ?? brawler.damage,
+    damageNear: params.damageNear,
+    damageFar: params.damageFar,
     size: params.size ?? 0.1,
     glowSize: params.glowSize ?? 0.2,
     big: !!params.big,
@@ -389,11 +535,25 @@ function projectileAtTip(angle, brawler, params = {}) {
     pull: !!params.pull,
     pullToX: params.pullToX,
     pullToZ: params.pullToZ,
-    pullDistance: params.pullDistance
+    pullDistance: params.pullDistance,
+    split: !!params.split,
+    splitDamage: params.splitDamage,
+    splitRange: params.splitRange,
+    splitSpeed: params.splitSpeed,
+    splitColor: params.splitColor,
+    splitSize: params.splitSize,
+    splitGlowSize: params.splitGlowSize,
+    splitSuperGain: params.splitSuperGain,
+    delay: params.delay || 0
   };
 }
 
 function fireEvent(event, local = true) {
+  if (event.delay && event.delay > 0) {
+    const delayed = { ...event, delay: 0 };
+    window.setTimeout(() => fireEvent(delayed, local), event.delay * 1000);
+    return;
+  }
   if (local) room.sendFire(event);
   spawnAttack(event, !local);
 }
@@ -403,6 +563,11 @@ function spawnAttackFromNetwork(event) {
 }
 
 function spawnAttack(event, ghost = false) {
+  if (event.delay && event.delay > 0) {
+    const delayed = { ...event, delay: 0 };
+    window.setTimeout(() => spawnAttack(delayed, ghost), event.delay * 1000);
+    return;
+  }
   const b = getBrawler(event.brawlerId);
 
   if (event.kind === 'projectile') {
@@ -468,7 +633,7 @@ function launchBasic() {
   const origin = { x: player.x, z: player.z };
 
   if (b.id === 'joao') {
-    fireEvent(projectileAtTip(angle, b, { range: 8.2, damage: 25, speed: 12.5, color: 0x48b6ff, size: 0.12, glowSize: 0.28 }));
+    fireEvent(projectileAtTip(angle, b, { range: 8.2, damage: 25, speed: 13.2, color: 0x48b6ff, size: 0.12, glowSize: 0.28 }));
     return;
   }
 
@@ -479,30 +644,66 @@ function launchBasic() {
 
   if (b.id === 'djonga') {
     for (let i = 0; i < 3; i++) {
-      fireEvent({ kind: 'cone', brawlerId: b.id, x: origin.x, z: origin.z, angle, range: 1.28, arc: 0.92, damage: 8, color: b.accent, delay: i * 0.11 });
+      fireEvent({ kind: 'cone', brawlerId: b.id, x: origin.x, z: origin.z, angle, range: 1.35, arc: 0.95, damage: 8, color: b.accent, delay: i * 0.09 });
     }
     return;
   }
 
   if (b.id === 'thomas') {
-    for (const off of [-0.21, -0.07, 0.07, 0.21]) {
-      fireEvent(projectileAtTip(angle + off, b, { range: 6.6, damage: 6, speed: 12.8, color: b.accent, size: 0.075, glowSize: 0.16 }));
-    }
+    // Leon-like: four blades in a narrow spread, stronger up close and weaker at max range.
+    const offsets = [-0.26, -0.08, 0.08, 0.26];
+    offsets.forEach((off, i) => {
+      fireEvent(projectileAtTip(angle + off, b, {
+        range: 8.5,
+        damage: 6,
+        damageNear: 9,
+        damageFar: 3,
+        speed: 14.5,
+        color: b.accent,
+        size: 0.075,
+        glowSize: 0.16,
+        delay: i * 0.025
+      }));
+    });
     return;
   }
 
   if (b.id === 'gui') {
-    fireEvent(projectileAtTip(angle, b, { range: 9.8, damage: 18, speed: 10.7, color: b.accent, size: 0.16, glowSize: 0.34, big: true }));
-    for (const off of [-0.38, -0.23, -0.08, 0.08, 0.23, 0.38]) {
-      fireEvent(projectileAtTip(angle + off, b, { range: 4.6, damage: 4, speed: 10.5, color: 0xff8de8, size: 0.065, glowSize: 0.14 }));
-    }
+    // Gene-like: one main orb; if it reaches max range without impact, it splits into 6 shards.
+    fireEvent(projectileAtTip(angle, b, {
+      range: 6.4,
+      damage: 18,
+      speed: 11.8,
+      color: b.accent,
+      size: 0.16,
+      glowSize: 0.34,
+      big: true,
+      split: true,
+      splitDamage: 4,
+      splitRange: 4.8,
+      splitSpeed: 12.2,
+      splitColor: 0xff8de8,
+      splitSize: 0.065,
+      splitGlowSize: 0.14,
+      splitSuperGain: 4
+    }));
     return;
   }
 
   if (b.id === 'lorenzo') {
-    for (const off of [-0.38, -0.28, -0.18, -0.08, 0, 0.08, 0.18, 0.28, 0.38]) {
-      fireEvent(projectileAtTip(angle + off, b, { range: 7, damage: 6, speed: 11.4, color: b.accent, size: 0.07, glowSize: 0.15 }));
-    }
+    // Pam-like: 9 scraps in a wide volley, sweeping left-to-right in two quick bursts.
+    const volley = [-0.58, -0.38, -0.18, 0.02, 0.22, 0.42, 0.58, -0.48, 0.48];
+    volley.forEach((off, i) => {
+      fireEvent(projectileAtTip(angle + off, b, {
+        range: 7.8,
+        damage: 6,
+        speed: 13.2,
+        color: b.accent,
+        size: 0.072,
+        glowSize: 0.15,
+        delay: i * 0.025
+      }));
+    });
     return;
   }
 
@@ -675,15 +876,20 @@ function updateNameTags() {
 function update(dt) {
   player.update(dt, input, world);
 
-  if (input.firing && player.canFire()) {
+  const shiftAiming = input.keys.has('shift');
+  const superPressed = input.consumeSuperPress();
+
+  if (input.firing && !shiftAiming && player.canFire()) {
     player.fire();
     launchBasic();
   }
 
-  if (input.consumeSuperPress() && player.canSuper()) {
+  if (superPressed && !shiftAiming && player.canSuper()) {
     launchSuper();
     ps.burst({ x: player.x, y: 0.6, z: player.z }, { count: 22, color: player.brawler.accent, speed: 3.2, life: 0.5 });
   }
+
+  showAttackPreview(shiftAiming && input.keys.has('q') ? 'super' : 'basic');
 
   for (const p of projectiles) p.update(dt, world, ps, player);
   projectiles = projectiles.filter(p => !p.dead);

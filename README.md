@@ -67,3 +67,15 @@ src/
   network.js        Supabase Realtime com Presence + Broadcast
 assets/concepts/    concept sheets dos 7 personagens caracterizados
 ```
+
+## Fase 8 — Ajustes de gameplay, mapa e mira
+
+- Barra de Super saiu do centro e foi para o canto inferior direito.
+- Arena ampliada para 34 x 24, com obstáculos redistribuídos e mais espaço para combate.
+- Spawns agora ficam bem separados entre si, priorizando cantos e laterais da arena.
+- Recarga e cadência foram retunadas por brawler para reduzir a sensação de espera excessiva entre tiros.
+- Super agora é disparada no Q. Espaço ainda funciona como atalho secundário.
+- Segurar Shift mostra a área/alcance do ataque básico. Segurar Shift + Q mostra a prévia da Super.
+- Lorenzo agora segue melhor a lógica da Pam: rajada de 9 projéteis espalhados, em voleio amplo.
+- Thomas agora segue melhor a lógica do Leon: 4 lâminas em cone estreito, com dano mais forte de perto e menor à distância.
+- Gui agora segue melhor a lógica do Eugênio/Gene: um orbe principal que, se não acertar nada, se divide em 6 projéteis em cone.

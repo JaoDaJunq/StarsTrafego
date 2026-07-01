@@ -1,5 +1,5 @@
-export const ARENA_W = 24;
-export const ARENA_D = 15;
+export const ARENA_W = 34;
+export const ARENA_D = 24;
 
 export const COLORS = {
   grassBase: 0x6dbf3e,
@@ -34,19 +34,23 @@ export const COLORS = {
 };
 
 export const OBSTACLES = [
-  { type: 'wall', x: 3.4, z: 3, w: 3.2, d: 0.8, label: 'Pilar de Report' },
-  { type: 'wall', x: 17.4, z: 3, w: 3.2, d: 0.8, label: 'Pilar de Report' },
-  { type: 'wall', x: 3.4, z: 11.4, w: 3.2, d: 0.8, label: 'Pilar de Report' },
-  { type: 'wall', x: 17.4, z: 11.4, w: 3.2, d: 0.8, label: 'Pilar de Report' },
-  { type: 'wall', x: 10.4, z: 6.6, w: 0.8, d: 3.4, label: 'Pilar de Report' },
+  { type: 'wall', x: 6.2, z: 4.2, w: 4.2, d: 0.9, label: 'Pilar de Report' },
+  { type: 'wall', x: 27.8, z: 4.2, w: 4.2, d: 0.9, label: 'Pilar de Report' },
+  { type: 'wall', x: 6.2, z: 19.8, w: 4.2, d: 0.9, label: 'Pilar de Report' },
+  { type: 'wall', x: 27.8, z: 19.8, w: 4.2, d: 0.9, label: 'Pilar de Report' },
+  { type: 'wall', x: 17.0, z: 12.0, w: 1.0, d: 5.0, label: 'Pilar de Report' },
+  { type: 'wall', x: 17.0, z: 5.8, w: 4.2, d: 0.9, label: 'Pilar de Report' },
+  { type: 'wall', x: 17.0, z: 18.2, w: 4.2, d: 0.9, label: 'Pilar de Report' },
 
-  { type: 'crate', x: 7.2, z: 5, w: 1.15, d: 1.15, hp: 3, label: 'Caixa de Briefing' },
-  { type: 'crate', x: 15.6, z: 5, w: 1.15, d: 1.15, hp: 3, label: 'Caixa de Briefing' },
-  { type: 'crate', x: 7.2, z: 9, w: 1.15, d: 1.15, hp: 3, label: 'Caixa de Briefing' },
-  { type: 'crate', x: 15.6, z: 9, w: 1.15, d: 1.15, hp: 3, label: 'Caixa de Briefing' },
-  { type: 'crate', x: 11.6, z: 12, w: 1.15, d: 1.15, hp: 3, label: 'Caixa de Briefing' },
+  { type: 'crate', x: 10.5, z: 8.0, w: 1.15, d: 1.15, hp: 3, label: 'Caixa de Briefing' },
+  { type: 'crate', x: 23.5, z: 8.0, w: 1.15, d: 1.15, hp: 3, label: 'Caixa de Briefing' },
+  { type: 'crate', x: 10.5, z: 16.0, w: 1.15, d: 1.15, hp: 3, label: 'Caixa de Briefing' },
+  { type: 'crate', x: 23.5, z: 16.0, w: 1.15, d: 1.15, hp: 3, label: 'Caixa de Briefing' },
+  { type: 'crate', x: 14.0, z: 12.0, w: 1.15, d: 1.15, hp: 3, label: 'Caixa de Briefing' },
+  { type: 'crate', x: 20.0, z: 12.0, w: 1.15, d: 1.15, hp: 3, label: 'Caixa de Briefing' },
 
-  { type: 'bush', x: 1.6, z: 6.5, w: 3, d: 2.3, label: 'Zona de Baixo CTR' },
-  { type: 'bush', x: 19.4, z: 6.5, w: 3, d: 2.3, label: 'Zona de Baixo CTR' },
-  { type: 'bush', x: 10.6, z: 0.9, w: 3.1, d: 1.7, label: 'Zona de Baixo CTR' }
+  { type: 'bush', x: 3.2, z: 12.0, w: 4.4, d: 3.2, label: 'Zona de Baixo CTR' },
+  { type: 'bush', x: 30.8, z: 12.0, w: 4.4, d: 3.2, label: 'Zona de Baixo CTR' },
+  { type: 'bush', x: 17.0, z: 2.2, w: 4.5, d: 2.2, label: 'Zona de Baixo CTR' },
+  { type: 'bush', x: 17.0, z: 21.8, w: 4.5, d: 2.2, label: 'Zona de Baixo CTR' }
 ];

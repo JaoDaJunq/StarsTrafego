@@ -17,7 +17,7 @@ export class Input {
     window.addEventListener('keydown', e => {
       const k = e.key.toLowerCase();
       this.keys.add(k);
-      if (k === ' ') {
+      if (k === 'q' || k === ' ') {
         this.superPressed = true;
         e.preventDefault();
       }
