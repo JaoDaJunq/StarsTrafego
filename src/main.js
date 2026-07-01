@@ -141,7 +141,9 @@ function renderBrawlerCards() {
     btn.className = 'brawler-card' + (b.id === selectedBrawlerId ? ' is-selected' : '');
     btn.dataset.brawlerId = b.id;
     btn.innerHTML = `
-      <span class="brawler-dot" style="background:${hexColor(b.color)}"></span>
+      <span class="brawler-portrait-wrap" style="background:linear-gradient(180deg, ${hexColor(b.accent)}, ${hexColor(b.color)})">
+        <img class="brawler-portrait" src="${b.portrait}" alt="${b.name}">
+      </span>
       <strong>${b.name}</strong>
       <small>${b.title}</small>
       <em>${b.hp} HP</em>
