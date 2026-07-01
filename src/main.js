@@ -616,16 +616,30 @@ function resetArena() {
   updateHudStatic();
 }
 
-function ensureNameTag(id, text) {
+function ensureNameTag(id) {
   let el = nameTagPool.get(id);
   if (!el) {
     el = document.createElement('div');
     el.className = 'name-tag';
+    el.innerHTML = `
+      <div class="name-tag-line"></div>
+      <div class="name-tag-hp"><span></span></div>
+    `;
     nameTagsContainer.appendChild(el);
     nameTagPool.set(id, el);
   }
-  el.textContent = text;
   return el;
+}
+
+function updateNameTag(el, label, hp, hpMax, down) {
+  const line = el.querySelector('.name-tag-line');
+  const fill = el.querySelector('.name-tag-hp span');
+  const ratio = hpMax > 0 ? Math.max(0, Math.min(1, hp / hpMax)) : 0;
+  line.textContent = label;
+  fill.style.width = `${ratio * 100}%`;
+  fill.classList.toggle('is-low', ratio <= 0.35);
+  fill.classList.toggle('is-down', !!down);
+  el.classList.toggle('is-down', !!down);
 }
 
 function removeNameTag(id) {
@@ -637,16 +651,22 @@ function removeNameTag(id) {
 }
 
 function positionTag(el, x, z) {
-  const p = new THREE.Vector3(x, 1.3, z);
+  const p = new THREE.Vector3(x, 1.65, z);
   p.project(camera);
   el.style.left = ((p.x * 0.5 + 0.5) * window.innerWidth) + 'px';
   el.style.top = ((-p.y * 0.5 + 0.5) * window.innerHeight) + 'px';
 }
 
 function updateNameTags() {
-  if (player) positionTag(ensureNameTag('__me', `${room.myName} · ${player.brawler.name} · ${Math.round(player.hp)}/${player.hpMax}${player.isDown ? ' · CAÍDO' : ''}`), player.x, player.z);
+  if (player) {
+    const tag = ensureNameTag('__me');
+    updateNameTag(tag, `${room.myName} · ${player.brawler.name} · ${Math.round(player.hp)}/${player.hpMax}${player.isDown ? ' · CAÍDO' : ''}`, player.hp, player.hpMax, player.isDown);
+    positionTag(tag, player.x, player.z);
+  }
   for (const [id, rp] of remotePlayers) {
-    positionTag(ensureNameTag(id, `${rp.name} · ${rp.brawler.name} · ${Math.round(rp.hp)}/${rp.hpMax}${rp.isDown ? ' · CAÍDO' : ''}`), rp.x, rp.z);
+    const tag = ensureNameTag(id);
+    updateNameTag(tag, `${rp.name} · ${rp.brawler.name} · ${Math.round(rp.hp)}/${rp.hpMax}${rp.isDown ? ' · CAÍDO' : ''}`, rp.hp, rp.hpMax, rp.isDown);
+    positionTag(tag, rp.x, rp.z);
   }
 }
 
