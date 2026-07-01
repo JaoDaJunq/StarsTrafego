@@ -3,7 +3,7 @@ import { pointInRectXZ } from './utils.js';
 import { COLORS, ARENA_W, ARENA_D } from './constants.js';
 
 export class Projectile {
-  constructor(scene, x, y, z, angle, speed, range, damage, big) {
+  constructor(scene, x, y, z, angle, speed, range, damage, big, ghost) {
     this.x = x;
     this.y = y;
     this.z = z;
@@ -13,6 +13,7 @@ export class Projectile {
     this.range = range;
     this.damage = damage;
     this.big = !!big;
+    this.ghost = !!ghost;
     this.dead = false;
 
     const geo = new THREE.SphereGeometry(big ? 0.14 : 0.09, 10, 8);
@@ -45,14 +46,16 @@ export class Projectile {
         return;
       }
 
-      for (const o of world.blockers) {
-        if (o.alive === false) continue;
-        if (pointInRectXZ(this.x, this.z, o.bounds)) {
-          const res = o.hit({ x: this.x, y: this.y, z: this.z }, ps, this.damage);
-          if (res) player.gainSuper(res.superGain);
-          this.dead = true;
-          this._removeFrom(world.scene);
-          return;
+      if (!this.ghost) {
+        for (const o of world.blockers) {
+          if (o.alive === false) continue;
+          if (pointInRectXZ(this.x, this.z, o.bounds)) {
+            const res = o.hit({ x: this.x, y: this.y, z: this.z }, ps, this.damage);
+            if (res) player.gainSuper(res.superGain);
+            this.dead = true;
+            this._removeFrom(world.scene);
+            return;
+          }
         }
       }
 

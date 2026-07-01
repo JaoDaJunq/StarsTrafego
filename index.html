@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>Brawl Adapt 3D — Protótipo Fase 1</title>
+<title>Brawl Adapt 3D — Fase 2 · Multiplayer</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;800;900&family=DM+Sans:wght@400;500;700&display=swap" rel="stylesheet">
@@ -14,7 +14,8 @@
 
   <div id="hud">
     <div id="hud-top-left">
-      <span class="eyebrow">PROTÓTIPO #01</span>
+      <span class="eyebrow">SALA <span id="hud-pin">----</span></span>
+      <span class="eyebrow" id="hud-roster-count">1 jogador</span>
       <div id="hud-ammo">
         <span class="pip filled"></span>
         <span class="pip filled"></span>
@@ -32,20 +33,35 @@
     <div id="hud-controls">WASD move · mouse mira · clique atira · espaço super · R reinicia</div>
   </div>
 
+  <div id="name-tags"></div>
+
   <div id="menu-overlay">
     <div class="menu-card">
       <span class="menu-eyebrow">ADAPT · INTERNO</span>
       <h1>BRAWL ADAPT</h1>
-      <p class="menu-tag">protótipo 3D — fase 1 · sentindo o movimento e a mira</p>
+      <p class="menu-tag">protótipo 3D — fase 2 · multiplayer com PIN</p>
+
+      <div class="room-form">
+        <label class="field-label" for="name-input">Seu nome</label>
+        <input id="name-input" class="text-input" type="text" maxlength="18" placeholder="Como te chamam?" autocomplete="off">
+
+        <label class="field-label" for="pin-input">PIN da sala</label>
+        <input id="pin-input" class="text-input pin-input" type="text" maxlength="4" placeholder="0000" inputmode="numeric" autocomplete="off">
+
+        <div class="room-buttons">
+          <button id="create-btn" type="button" class="btn-secondary">CRIAR SALA</button>
+          <button id="join-btn" type="button" class="btn-primary">ENTRAR</button>
+        </div>
+        <p id="room-status" class="room-status"></p>
+      </div>
+
       <ul class="menu-controls">
         <li><b>WASD</b> mover</li>
         <li><b>MOUSE</b> mirar</li>
         <li><b>CLIQUE</b> atirar</li>
         <li><b>ESPAÇO</b> super, quando a barra estiver cheia</li>
-        <li><b>R</b> reinicia a arena</li>
       </ul>
-      <button id="play-btn">ENTRAR NA ARENA</button>
-      <span class="menu-footnote">Pilares de Report bloqueiam tudo. Caixas de Briefing quebram e voltam sozinhas.</span>
+      <span class="menu-footnote">Combine o mesmo PIN com quem for jogar junto. Ainda sem dano entre jogadores nessa fase — é só pra ver todo mundo se mexendo na mesma arena.</span>
     </div>
   </div>
 

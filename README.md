@@ -1,98 +1,82 @@
-# Brawl Adapt 3D — Protótipo Fase 1
+# Brawl Adapt 3D — Fase 2 · Multiplayer com Supabase Realtime
 
-Evolução do protótipo 2D pra um visual de verdade no estilo Brawl Stars:
-Three.js, câmera fixa em ângulo, personagem chibi com contorno toon, chão de
-grama/areia e obstáculos com a mesma piada interna de tráfego pago.
+Duas ou mais pessoas entram na mesma sala digitando o mesmo PIN e se veem
+mexendo em tempo real na mesma arena. Ainda sem dano entre jogadores — é
+sobre validar a sincronização de posição, mira e disparo visual antes de
+entrar em combate de verdade.
 
 ## Rodar
 
-Só abrir o `index.html` no navegador — o jogo já vem compilado em
-`dist/bundle.js`, não precisa instalar nada nem rodar build.
+Abrir o `index.html` no navegador — já vem compilado em `dist/bundle.js`.
+Pra jogar em grupo, cada pessoa abre o link do GitHub Pages e usa o mesmo
+PIN.
 
-Pra subir no GitHub Pages: sobe **todos** os arquivos e pastas (incluindo a
-pasta `dist/`) na raiz do repositório, ativa o GitHub Pages em Settings →
-Pages apontando pra branch principal, pasta `/ (root)`.
+**Subir no GitHub Pages:** sobe tudo (incluindo a pasta `dist/`) na raiz do
+repositório e ativa o Pages em Settings → Pages, branch principal, pasta
+`/ (root)`.
 
-## Se quiser editar e recompilar
+## Como funciona a sala
 
-O código-fonte real está em `src/`, em módulos ES (`import`/`export`). O que
-roda no navegador é o bundle gerado a partir dele.
+- Ao abrir o jogo, você digita seu nome e um PIN de 4 dígitos
+- **Criar sala** gera um PIN aleatório e já entra
+- **Entrar** usa o PIN que você digitar — combina esse número com quem for
+  jogar junto (por WhatsApp, por exemplo)
+- Não existe lista de salas: quem digita o mesmo PIN cai automaticamente
+  no mesmo canal. Não precisa criar nada antes — o "servidor" da sala é
+  só o canal do Supabase Realtime, não fica nada salvo
+- Cada jogador vira uma cor diferente (o modelo genérico ainda é o mesmo
+  pra todo mundo — os brawlers de verdade entram na fase 4)
 
-```
-npm install
-node build.js
-```
+## O que sincroniza nessa fase
 
-Isso gera `dist/bundle.js` de novo. `node_modules` não vai no zip pra não
-pesar — só rodar `npm install` uma vez se for editar o código.
+- Posição, direção do corpo e da mira de cada jogador, ~11 vezes por
+  segundo, com suavização (interpolação) pra não ficar travando na tela
+  de quem está assistindo
+- Disparos (normal e Super) aparecem visualmente pros outros jogadores
+- Entrada e saída de jogadores da sala, com contagem ao vivo no HUD
 
-## Controles
+## O que NÃO sincroniza ainda (de propósito)
 
-Iguais à fase 1 em 2D:
+- **Dano entre jogadores.** Os tiros de um jogador não acertam o outro
+  ainda — cada cliente só processa a física do próprio tiro contra o
+  cenário
+- **Estado das Caixas de Briefing.** Cada jogador simula os obstáculos
+  localmente. Se você destruir uma caixa, só você vê ela sumir — os
+  outros ainda veem ela inteira até destruírem por conta própria. Isso
+  é esperado nessa fase e vai ser resolvido junto com a sincronização de
+  combate
+- Reconexão automática caso a internet caia no meio da partida
 
-- **WASD** — mover (o corpo acompanha a direção do movimento)
-- **Mouse** — mirar (a arma sempre aponta pro ponto do chão sob o cursor,
-  independente de pra onde você está andando)
-- **Clique** — atirar. 3 tiros no pente, recarrega um por vez
-- **Espaço** — Super quando a barra estiver cheia
-- **R** — reinicia a arena
+## Testando sozinho vs. testando em grupo
 
-## O que mudou da fase 1 (2D) pra essa
+Pra sentir a sincronização sem precisar de outra pessoa, abre o jogo em
+duas abas (ou dois navegadores) na sua máquina, entra com o mesmo PIN nas
+duas, e anda em uma pra ver a outra se mexer.
 
-- Renderização em Three.js com câmera ortográfica fixa em ângulo (55° de
-  elevação), no mesmo espírito da câmera do jogo original — não é top-down
-  reto
-- Material toon (cel-shading) com contorno preto em todos os personagens e
-  obstáculos, feito via técnica de "inverted hull" (uma cópia do mesh,
-  ligeiramente maior, com as faces viradas pra dentro)
-- Paleta clara e vibrante: chão de grama procedural com textura desenhada
-  via canvas, borda de areia/terra ao redor da arena
-- Personagem chibi: corpo esférico + visor + arma, com corpo e mira
-  rotacionando de forma independente (o mesmo joystick duplo de sempre,
-  agora em 3D)
-- Sombras reais (luz direcional com shadow map), partículas 3D com física
-  simples de gravidade
-- Pilares de Report agora têm um "boné" dourado no topo (lembra uma barra
-  de gráfico); Caixas de Briefing têm textura de madeira procedural com
-  selo de papel; Zonas de Baixo CTR viraram arbustos de verdade (esferas
-  agrupadas), com o personagem ficando semitransparente dentro delas
-
-## O que não tem ainda (de propósito)
-
-Mesma lista da fase 1 — isso ainda é só sobre validar o feel do movimento
-e da mira, agora com o visual definitivo:
-
-- Multiplayer (fase 2, Supabase Realtime)
-- Sistema de sala/lobby
-- Os brawlers de verdade baseados no time de tráfego (fase 3)
-- Vida, dano no jogador e condição de vitória
-- Barra de vida visível nas Caixas de Briefing (tinha na versão 2D, ainda
-  não voltou pra essa — fácil de adicionar quando quiser)
-
-## Estrutura de arquivos
+## Estrutura de arquivos (o que mudou da fase 1)
 
 ```
-brawl-adapt-3d/
-  index.html          carrega o bundle e monta o HUD/menu
-  style.css             HUD e menu — paleta clara, UI "chunky"
-  build.js                script de build (esbuild)
-  package.json
-  dist/
-    bundle.js               tudo compilado, é isso que o navegador roda
-  src/
-    main.js                  cena, câmera, luz, loop do jogo
-    constants.js               dimensão da arena, paleta, layout dos obstáculos
-    utils.js                    matemática e colisão (círculo x retângulo em XZ)
-    toon.js                      material toon + contorno + textura de brilho
-    textures.js                    texturas procedurais (grama, terra, madeira)
-    player.js                       personagem: mesh, movimento, mira, tiro
-    projectile.js                    projéteis e colisão
-    particles.js                      sistema de partículas 3D
-    world.js                           chão, pilares, caixas, arbustos
-    input.js                            teclado, mouse e raycast pro chão
+src/
+  network.js        conexão com a sala (Supabase Realtime — Presence + Broadcast)
+  brawlerMesh.js       construção do personagem, compartilhada entre local e remoto
+  player.js               agora só cuida do jogador local (input, física, tiro)
+  remotePlayer.js           jogador remoto — mesh igual, mas guiado por rede + interpolação
+  projectile.js               ganhou o modo "ghost" (tiro visual dos outros, sem colisão local)
+  main.js                       tela de sala, HUD de sala/contagem, etiquetas de nome flutuantes
 ```
+
+## Sobre a credencial do Supabase
+
+A URL e a chave pública (anon/publishable key) do projeto estão embutidas
+no código-fonte (`src/network.js`). Isso é esperado e seguro pra esse tipo
+de chave — ela é feita pra ser pública, não dá acesso a nada sensível por
+si só. Como essa fase usa só Realtime (Presence + Broadcast) e nenhuma
+tabela do banco, não existe dado nenhum sendo lido ou gravado no Postgres.
 
 ## Próximos passos
 
-Mesmos de antes: fechar o elenco do time de tráfego com o "vibe" de cada
-um, depois plugar Supabase Realtime pra multiplayer de verdade.
+Fase 3: fechar o elenco do time de tráfego e desenhar o ataque + Super de
+cada brawler de verdade. Fase 4: sincronizar dano de verdade entre
+jogadores (aí sim as Caixas de Briefing e o combate ficam compartilhados
+pra todo mundo).
+

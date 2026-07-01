@@ -2,16 +2,25 @@ import * as THREE from 'three';
 import { COLORS, ARENA_W, ARENA_D } from './constants.js';
 import { buildWorld } from './world.js';
 import { Player } from './player.js';
+import { RemotePlayer } from './remotePlayer.js';
 import { Projectile } from './projectile.js';
 import { ParticleSystem } from './particles.js';
 import { Input } from './input.js';
+import { Room, randomPin } from './network.js';
 
 const canvasHolder = document.getElementById('canvas-holder');
 const hudAmmoPips = document.querySelectorAll('#hud-ammo .pip');
 const hudSuperBox = document.getElementById('hud-super');
 const hudSuperFill = document.getElementById('hud-super-fill');
+const hudPin = document.getElementById('hud-pin');
+const hudRosterCount = document.getElementById('hud-roster-count');
 const menuOverlay = document.getElementById('menu-overlay');
-const playBtn = document.getElementById('play-btn');
+const nameInput = document.getElementById('name-input');
+const pinInput = document.getElementById('pin-input');
+const createBtn = document.getElementById('create-btn');
+const joinBtn = document.getElementById('join-btn');
+const roomStatus = document.getElementById('room-status');
+const nameTagsContainer = document.getElementById('name-tags');
 
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(COLORS.sky);
@@ -76,19 +85,121 @@ fill.position.set(target.x - 10, 8, target.z - 8);
 scene.add(fill);
 
 const world = buildWorld(scene);
+world.scene = scene;
 const input = new Input(renderer.domElement, camera, world.groundMesh);
 const ps = new ParticleSystem(scene);
 
-let player = new Player(ARENA_W / 2, ARENA_D / 2 + 4.4);
-scene.add(player.root);
+const room = new Room();
+const remotePlayers = new Map();
+const nameTagPool = new Map();
 
+let player = null;
 let projectiles = [];
 let state = 'menu';
 let shakeTimer = 0;
+let netSendTimer = 0;
+const NET_SEND_INTERVAL = 0.09;
 
-playBtn.addEventListener('click', () => {
+function setStatus(msg, kind) {
+  roomStatus.textContent = msg;
+  roomStatus.className = 'room-status' + (kind ? ' is-' + kind : '');
+}
+
+function spawnPointFor(slot) {
+  const angle = (slot / 8) * Math.PI * 2;
+  return {
+    x: ARENA_W / 2 + Math.cos(angle) * 3.4,
+    z: ARENA_D / 2 + Math.sin(angle) * 3.4
+  };
+}
+
+let started = false;
+
+function startGame() {
+  const sp = spawnPointFor(room.mySlot);
+  player = new Player(sp.x, sp.z, room.mySlot);
+  scene.add(player.root);
   state = 'playing';
-  menuOverlay.classList.add('hidden');
+}
+
+room.onRosterChange = (entries, myId) => {
+  const seen = new Set();
+  entries.forEach(e => {
+    seen.add(e.id);
+    if (e.id === myId) return;
+    if (!remotePlayers.has(e.id)) {
+      const rp = new RemotePlayer(e.id, e.name, e.slot);
+      scene.add(rp.root);
+      remotePlayers.set(e.id, rp);
+    } else {
+      remotePlayers.get(e.id).name = e.name;
+    }
+  });
+  for (const [id, rp] of Array.from(remotePlayers.entries())) {
+    if (!seen.has(id)) {
+      rp.dispose(scene);
+      remotePlayers.delete(id);
+      removeNameTag(id);
+    }
+  }
+  hudRosterCount.textContent = entries.length + (entries.length === 1 ? ' jogador' : ' jogadores');
+
+  if (!started) {
+    started = true;
+    startGame();
+    menuOverlay.classList.add('hidden');
+  }
+};
+
+room.onPeerState = payload => {
+  const rp = remotePlayers.get(payload.id);
+  if (rp) rp.applyNetState(payload);
+};
+
+room.onPeerFire = payload => {
+  projectiles.push(new Projectile(
+    scene, payload.x, payload.y, payload.z, payload.angle,
+    payload.big ? 15 : 13, payload.big ? 12 : 11, 0, payload.big, true
+  ));
+  ps.burst({ x: payload.x, y: payload.y, z: payload.z }, {
+    count: payload.big ? 16 : 5,
+    color: payload.big ? COLORS.gold : COLORS.playerBody,
+    speed: payload.big ? 3 : 1.2,
+    life: payload.big ? 0.4 : 0.14
+  });
+};
+
+async function attemptJoin() {
+  const pin = pinInput.value.trim();
+  if (!pin) {
+    setStatus('Digita um PIN ou clica em Criar Sala.', 'error');
+    return;
+  }
+  const name = nameInput.value.trim() || 'Jogador';
+  createBtn.disabled = true;
+  joinBtn.disabled = true;
+  setStatus('Conectando...', null);
+  try {
+    await room.join(pin, name);
+    setStatus('Conectado!', 'ok');
+    hudPin.textContent = pin;
+  } catch (err) {
+    setStatus('Não consegui conectar. Confere sua internet e tenta de novo.', 'error');
+    createBtn.disabled = false;
+    joinBtn.disabled = false;
+  }
+}
+
+createBtn.addEventListener('click', () => {
+  pinInput.value = randomPin();
+  attemptJoin();
+});
+joinBtn.addEventListener('click', () => attemptJoin());
+pinInput.addEventListener('keydown', e => {
+  if (e.key === 'Enter') attemptJoin();
+});
+nameInput.addEventListener('keydown', e => {
+  if (e.key === 'Enter') attemptJoin();
 });
 
 window.addEventListener('keydown', e => {
@@ -96,12 +207,47 @@ window.addEventListener('keydown', e => {
 });
 
 function resetArena() {
+  const sp = spawnPointFor(room.mySlot);
   scene.remove(player.root);
-  player = new Player(ARENA_W / 2, ARENA_D / 2 + 4.4);
+  player = new Player(sp.x, sp.z, room.mySlot);
   scene.add(player.root);
   for (const p of projectiles) p._removeFrom(scene);
   projectiles = [];
   world.reset();
+}
+
+function ensureNameTag(id, text) {
+  let el = nameTagPool.get(id);
+  if (!el) {
+    el = document.createElement('div');
+    el.className = 'name-tag';
+    nameTagsContainer.appendChild(el);
+    nameTagPool.set(id, el);
+  }
+  el.textContent = text;
+  return el;
+}
+
+function removeNameTag(id) {
+  const el = nameTagPool.get(id);
+  if (el) {
+    el.remove();
+    nameTagPool.delete(id);
+  }
+}
+
+function positionTag(el, x, z) {
+  const p = new THREE.Vector3(x, 1.3, z);
+  p.project(camera);
+  el.style.left = ((p.x * 0.5 + 0.5) * window.innerWidth) + 'px';
+  el.style.top = ((-p.y * 0.5 + 0.5) * window.innerHeight) + 'px';
+}
+
+function updateNameTags() {
+  if (player) positionTag(ensureNameTag('__me', room.myName), player.x, player.z);
+  for (const [id, rp] of remotePlayers) {
+    positionTag(ensureNameTag(id, rp.name), rp.x, rp.z);
+  }
 }
 
 function update(dt) {
@@ -109,8 +255,9 @@ function update(dt) {
 
   if (input.firing && player.canFire()) {
     const shot = player.fire();
-    projectiles.push(new Projectile(scene, shot.x, shot.y, shot.z, shot.angle, 13, 11, 1, false));
+    projectiles.push(new Projectile(scene, shot.x, shot.y, shot.z, shot.angle, 13, 11, 1, false, false));
     ps.burst({ x: shot.x, y: shot.y, z: shot.z }, { count: 5, color: COLORS.playerBody, speed: 1.2, life: 0.14 });
+    room.sendFire({ x: shot.x, y: shot.y, z: shot.z, angle: shot.angle, big: false });
   }
 
   if (input.consumeSuperPress() && player.canSuper()) {
@@ -119,7 +266,8 @@ function update(dt) {
     for (const off of offsets) {
       const a = baseAngle + off;
       const tip = player.gunPivot.localToWorld(new THREE.Vector3(0, 0, 1.02));
-      projectiles.push(new Projectile(scene, tip.x, tip.y, tip.z, a, 15, 12, 3, true));
+      projectiles.push(new Projectile(scene, tip.x, tip.y, tip.z, a, 15, 12, 3, true, false));
+      room.sendFire({ x: tip.x, y: tip.y, z: tip.z, angle: a, big: true });
     }
     player.useSuper();
     ps.burst({ x: player.x, y: 0.6, z: player.z }, { count: 26, color: COLORS.gold, speed: 3.6, life: 0.55 });
@@ -132,11 +280,21 @@ function update(dt) {
   world.update(dt);
   ps.update(dt);
 
+  for (const rp of remotePlayers.values()) rp.update(dt);
+
+  netSendTimer += dt;
+  if (netSendTimer >= NET_SEND_INTERVAL) {
+    netSendTimer = 0;
+    room.sendState(player.netState());
+  }
+
   if (shakeTimer > 0) shakeTimer -= dt;
 
   hudAmmoPips.forEach((el, i) => el.classList.toggle('filled', i < player.ammo));
   hudSuperFill.style.width = player.superCharge + '%';
   hudSuperBox.classList.toggle('is-ready', player.superCharge >= player.superMax);
+
+  updateNameTags();
 }
 
 let last = performance.now();
@@ -169,3 +327,5 @@ function loop(now) {
   requestAnimationFrame(loop);
 }
 requestAnimationFrame(loop);
+
+window.addEventListener('beforeunload', () => room.leave());

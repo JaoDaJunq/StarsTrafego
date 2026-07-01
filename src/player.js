@@ -1,16 +1,12 @@
-import * as THREE from 'three';
-import { toonMaterial, withOutline } from './toon.js';
 import { clamp, lerpAngle, resolveCircleRectXZ } from './utils.js';
-import { COLORS, ARENA_W, ARENA_D } from './constants.js';
-
-const BODY_HEIGHT = 0.5;
-const GUN_TIP_LOCAL = new THREE.Vector3(0, 0, 1.02);
+import { ARENA_W, ARENA_D } from './constants.js';
+import { buildBrawlerMesh, setMeshOpacity, GUN_TIP_LOCAL, PLAYER_RADIUS, colorForSlot } from './brawlerMesh.js';
 
 export class Player {
-  constructor(x, z) {
+  constructor(x, z, colorSlot = 0) {
     this.x = x;
     this.z = z;
-    this.radius = 0.5;
+    this.radius = PLAYER_RADIUS;
     this.speed = 5.6;
     this.bodyAngle = 0;
     this.aimAngle = 0;
@@ -31,47 +27,11 @@ export class Player {
     this.muzzleFlash = 0;
     this.bob = 0;
 
-    this._buildMesh();
-  }
-
-  _buildMesh() {
-    this.root = new THREE.Object3D();
-
-    this.bodyPivot = new THREE.Object3D();
-    this.bodyPivot.position.set(0, BODY_HEIGHT, 0);
-    this.root.add(this.bodyPivot);
-
-    const bodyGeo = new THREE.SphereGeometry(this.radius, 20, 14);
-    const bodyMesh = new THREE.Mesh(bodyGeo, toonMaterial(COLORS.playerBody));
-    bodyMesh.scale.set(1, 0.94, 1);
-    bodyMesh.castShadow = true;
-    const bodyGroup = withOutline(bodyMesh, 0.075, COLORS.outline);
-    this.bodyPivot.add(bodyGroup);
-
-    const visorGeo = new THREE.SphereGeometry(0.3, 16, 10);
-    const visorMesh = new THREE.Mesh(visorGeo, toonMaterial(COLORS.playerVisor));
-    visorMesh.scale.set(0.5, 0.55, 1);
-    visorMesh.position.set(0, 0.03, this.radius * 0.62);
-    const visorGroup = withOutline(visorMesh, 0.05, COLORS.outline);
-    this.bodyPivot.add(visorGroup);
-
-    this.gunPivot = new THREE.Object3D();
-    this.gunPivot.position.set(0, BODY_HEIGHT, 0);
-    this.root.add(this.gunPivot);
-
-    const gunGeo = new THREE.BoxGeometry(0.2, 0.19, 0.62);
-    const gunMesh = new THREE.Mesh(gunGeo, toonMaterial(COLORS.gunMetal));
-    gunMesh.position.set(0, 0, 0.6);
-    gunMesh.castShadow = true;
-    const gunGroup = withOutline(gunMesh, 0.1, COLORS.outline);
-    this.gunPivot.add(gunGroup);
-
-    const shadowGeo = new THREE.CircleGeometry(this.radius * 0.85, 20);
-    const shadowMat = new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.28 });
-    this.shadowMesh = new THREE.Mesh(shadowGeo, shadowMat);
-    this.shadowMesh.rotation.x = -Math.PI / 2;
-    this.shadowMesh.position.y = 0.02;
-    this.root.add(this.shadowMesh);
+    const mesh = buildBrawlerMesh(colorForSlot(colorSlot));
+    this.root = mesh.root;
+    this.bodyPivot = mesh.bodyPivot;
+    this.gunPivot = mesh.gunPivot;
+    this.shadowMesh = mesh.shadowMesh;
   }
 
   get gunTipWorld() {
@@ -123,14 +83,7 @@ export class Player {
     this.root.position.set(this.x, hop, this.z);
     this.bodyPivot.rotation.y = this.bodyAngle;
     this.gunPivot.rotation.y = this.aimAngle;
-
-    const targetOpacity = this.inBush ? 0.45 : 1;
-    this.root.traverse(obj => {
-      if (obj.isMesh && obj.material && obj !== this.shadowMesh) {
-        obj.material.transparent = true;
-        obj.material.opacity = targetOpacity;
-      }
-    });
+    setMeshOpacity(this.root, this.shadowMesh, this.inBush ? 0.45 : 1);
   }
 
   tryMove(nx, nz, world) {
@@ -168,5 +121,16 @@ export class Player {
 
   useSuper() {
     this.superCharge = 0;
+  }
+
+  netState() {
+    return {
+      x: this.x,
+      z: this.z,
+      b: this.bodyAngle,
+      a: this.aimAngle,
+      m: this.moving,
+      u: this.inBush
+    };
   }
 }
