@@ -1,10 +1,14 @@
 import { lerpAngle } from './utils.js';
-import { buildBrawlerMesh, setMeshOpacity, colorForSlot } from './brawlerMesh.js';
+import { buildBrawlerMesh, setMeshOpacity } from './brawlerMesh.js';
+import { getBrawler, DEFAULT_BRAWLER_ID } from './brawlers.js';
 
 export class RemotePlayer {
-  constructor(id, name, colorSlot) {
+  constructor(id, name, brawlerId = DEFAULT_BRAWLER_ID, colorSlot = 0) {
     this.id = id;
     this.name = name || 'Convidado';
+    this.brawlerId = brawlerId;
+    this.brawler = getBrawler(brawlerId);
+    this.colorSlot = colorSlot;
 
     this.x = 0;
     this.z = 0;
@@ -12,6 +16,7 @@ export class RemotePlayer {
     this.aimAngle = 0;
     this.moving = false;
     this.inBush = false;
+    this.stealth = false;
     this.bob = 0;
 
     this.targetX = 0;
@@ -22,20 +27,43 @@ export class RemotePlayer {
     this.lastSeen = performance.now();
     this.hasData = false;
 
-    const mesh = buildBrawlerMesh(colorForSlot(colorSlot));
+    this._buildMesh();
+  }
+
+  _buildMesh() {
+    const mesh = buildBrawlerMesh(this.brawler.color, this.brawlerId);
     this.root = mesh.root;
     this.bodyPivot = mesh.bodyPivot;
     this.gunPivot = mesh.gunPivot;
     this.shadowMesh = mesh.shadowMesh;
   }
 
+  setBrawler(brawlerId, scene) {
+    if (!brawlerId || brawlerId === this.brawlerId) return;
+    const oldRoot = this.root;
+    this.brawlerId = brawlerId;
+    this.brawler = getBrawler(brawlerId);
+    this._buildMesh();
+    this.root.position.set(this.x, 0, this.z);
+    if (scene) {
+      scene.remove(oldRoot);
+      oldRoot.traverse(obj => {
+        if (obj.geometry) obj.geometry.dispose();
+        if (obj.material) obj.material.dispose();
+      });
+      scene.add(this.root);
+    }
+  }
+
   applyNetState(state) {
+    if (state.r && state.r !== this.brawlerId) this.setBrawler(state.r, this.root?.parent);
     this.targetX = state.x;
     this.targetZ = state.z;
     this.targetBodyAngle = state.b;
     this.targetAimAngle = state.a;
     this.moving = !!state.m;
     this.inBush = !!state.u;
+    this.stealth = !!state.v;
     this.lastSeen = performance.now();
 
     if (!this.hasData) {
@@ -68,7 +96,8 @@ export class RemotePlayer {
     this.root.position.set(this.x, hop, this.z);
     this.bodyPivot.rotation.y = this.bodyAngle;
     this.gunPivot.rotation.y = this.aimAngle;
-    setMeshOpacity(this.root, this.shadowMesh, this.inBush ? 0.4 : 1);
+    const opacity = this.stealth ? 0.22 : (this.inBush ? 0.4 : 1);
+    setMeshOpacity(this.root, this.shadowMesh, opacity);
   }
 
   dispose(scene) {

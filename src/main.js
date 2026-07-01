@@ -7,6 +7,9 @@ import { Projectile } from './projectile.js';
 import { ParticleSystem } from './particles.js';
 import { Input } from './input.js';
 import { Room, randomPin } from './network.js';
+import { BRAWLERS, DEFAULT_BRAWLER_ID, getBrawler } from './brawlers.js';
+import { ConeSlash, ImpactArea, ChainTrap, DashAttack, LeapAttack, HealTurret } from './attackEffects.js';
+import { clamp } from './utils.js';
 
 const canvasHolder = document.getElementById('canvas-holder');
 const hudAmmoPips = document.querySelectorAll('#hud-ammo .pip');
@@ -14,6 +17,9 @@ const hudSuperBox = document.getElementById('hud-super');
 const hudSuperFill = document.getElementById('hud-super-fill');
 const hudPin = document.getElementById('hud-pin');
 const hudRosterCount = document.getElementById('hud-roster-count');
+const hudBrawler = document.getElementById('hud-brawler');
+const hudHealthFill = document.getElementById('hud-health-fill');
+const hudHealthText = document.getElementById('hud-health-text');
 const menuOverlay = document.getElementById('menu-overlay');
 const nameInput = document.getElementById('name-input');
 const pinInput = document.getElementById('pin-input');
@@ -21,6 +27,8 @@ const createBtn = document.getElementById('create-btn');
 const joinBtn = document.getElementById('join-btn');
 const roomStatus = document.getElementById('room-status');
 const nameTagsContainer = document.getElementById('name-tags');
+const brawlerGrid = document.getElementById('brawler-grid');
+const brawlerSummary = document.getElementById('brawler-summary');
 
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(COLORS.sky);
@@ -93,17 +101,57 @@ const room = new Room();
 const remotePlayers = new Map();
 const nameTagPool = new Map();
 
+let selectedBrawlerId = DEFAULT_BRAWLER_ID;
 let player = null;
 let projectiles = [];
+let effects = [];
 let state = 'menu';
 let shakeTimer = 0;
 let netSendTimer = 0;
+let started = false;
 const NET_SEND_INTERVAL = 0.09;
 
 function setStatus(msg, kind) {
   roomStatus.textContent = msg;
   roomStatus.className = 'room-status' + (kind ? ' is-' + kind : '');
 }
+
+function hexColor(value) {
+  return '#' + value.toString(16).padStart(6, '0');
+}
+
+function renderBrawlerCards() {
+  brawlerGrid.innerHTML = '';
+  for (const b of BRAWLERS) {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'brawler-card' + (b.id === selectedBrawlerId ? ' is-selected' : '');
+    btn.dataset.brawlerId = b.id;
+    btn.innerHTML = `
+      <span class="brawler-dot" style="background:${hexColor(b.color)}"></span>
+      <strong>${b.name}</strong>
+      <small>${b.title}</small>
+      <em>${b.hp} HP</em>
+    `;
+    btn.addEventListener('click', () => selectBrawler(b.id));
+    brawlerGrid.appendChild(btn);
+  }
+  updateBrawlerSummary();
+}
+
+function selectBrawler(id) {
+  selectedBrawlerId = id;
+  for (const card of brawlerGrid.querySelectorAll('.brawler-card')) {
+    card.classList.toggle('is-selected', card.dataset.brawlerId === id);
+  }
+  updateBrawlerSummary();
+}
+
+function updateBrawlerSummary() {
+  const b = getBrawler(selectedBrawlerId);
+  brawlerSummary.textContent = `${b.name}: ${b.attack} · Super: ${b.super} · Vida ${b.hp}`;
+}
+renderBrawlerCards();
 
 function spawnPointFor(slot) {
   const angle = (slot / 8) * Math.PI * 2;
@@ -113,28 +161,62 @@ function spawnPointFor(slot) {
   };
 }
 
-let started = false;
+function aimTarget(maxRange) {
+  const dx = input.aimX - player.x;
+  const dz = input.aimZ - player.z;
+  const dist = Math.hypot(dx, dz) || 1;
+  const limited = Math.min(dist, maxRange);
+  return {
+    x: clamp(player.x + (dx / dist) * limited, 0.6, ARENA_W - 0.6),
+    z: clamp(player.z + (dz / dist) * limited, 0.6, ARENA_D - 0.6)
+  };
+}
 
 function startGame() {
   const sp = spawnPointFor(room.mySlot);
-  player = new Player(sp.x, sp.z, room.mySlot);
+  player = new Player(sp.x, sp.z, room.myBrawlerId || selectedBrawlerId, room.mySlot);
   scene.add(player.root);
   state = 'playing';
+  menuOverlay.classList.add('hidden');
+  updateHudStatic();
+}
+
+function updateHudStatic() {
+  if (!player) return;
+  hudBrawler.textContent = `${player.brawler.name} · ${player.brawler.title}`;
+}
+
+function findDuplicateBrawler(entries, myId) {
+  const me = entries.find(e => e.id === myId);
+  if (!me) return null;
+  return entries.find(e => e.id !== myId && e.brawlerId === me.brawlerId);
 }
 
 room.onRosterChange = (entries, myId) => {
+  const duplicate = !started ? findDuplicateBrawler(entries, myId) : null;
+  if (duplicate) {
+    setStatus(`${getBrawler(room.myBrawlerId).name} já está escolhido nessa sala. Troca o brawler ou usa outro PIN.`, 'error');
+    room.leave();
+    createBtn.disabled = false;
+    joinBtn.disabled = false;
+    return;
+  }
+
   const seen = new Set();
   entries.forEach(e => {
     seen.add(e.id);
     if (e.id === myId) return;
     if (!remotePlayers.has(e.id)) {
-      const rp = new RemotePlayer(e.id, e.name, e.slot);
+      const rp = new RemotePlayer(e.id, e.name, e.brawlerId, e.slot);
       scene.add(rp.root);
       remotePlayers.set(e.id, rp);
     } else {
-      remotePlayers.get(e.id).name = e.name;
+      const rp = remotePlayers.get(e.id);
+      rp.name = e.name;
+      rp.setBrawler(e.brawlerId, scene);
     }
   });
+
   for (const [id, rp] of Array.from(remotePlayers.entries())) {
     if (!seen.has(id)) {
       rp.dispose(scene);
@@ -142,12 +224,12 @@ room.onRosterChange = (entries, myId) => {
       removeNameTag(id);
     }
   }
+
   hudRosterCount.textContent = entries.length + (entries.length === 1 ? ' jogador' : ' jogadores');
 
   if (!started) {
     started = true;
     startGame();
-    menuOverlay.classList.add('hidden');
   }
 };
 
@@ -157,17 +239,224 @@ room.onPeerState = payload => {
 };
 
 room.onPeerFire = payload => {
-  projectiles.push(new Projectile(
-    scene, payload.x, payload.y, payload.z, payload.angle,
-    payload.big ? 15 : 13, payload.big ? 12 : 11, 0, payload.big, true
-  ));
-  ps.burst({ x: payload.x, y: payload.y, z: payload.z }, {
-    count: payload.big ? 16 : 5,
-    color: payload.big ? COLORS.gold : COLORS.playerBody,
-    speed: payload.big ? 3 : 1.2,
-    life: payload.big ? 0.4 : 0.14
-  });
+  spawnAttackFromNetwork(payload);
 };
+
+function addProjectile(data, ghost = false) {
+  projectiles.push(new Projectile(
+    scene,
+    data.x,
+    data.y === undefined ? 0.55 : data.y,
+    data.z,
+    data.angle,
+    data.speed,
+    data.range,
+    data.damage,
+    !!data.big,
+    ghost,
+    {
+      color: data.color,
+      size: data.size,
+      glowSize: data.glowSize,
+      pierce: data.pierce,
+      superGain: data.superGain
+    }
+  ));
+}
+
+function projectileAtTip(angle, brawler, params = {}) {
+  const tip = player.gunTipWorld;
+  return {
+    kind: 'projectile',
+    brawlerId: brawler.id,
+    x: tip.x,
+    y: tip.y,
+    z: tip.z,
+    angle,
+    color: params.color ?? brawler.accent,
+    speed: params.speed ?? 13,
+    range: params.range ?? 8,
+    damage: params.damage ?? brawler.damage,
+    size: params.size ?? 0.1,
+    glowSize: params.glowSize ?? 0.2,
+    big: !!params.big,
+    pierce: !!params.pierce,
+    superGain: params.superGain
+  };
+}
+
+function fireEvent(event, local = true) {
+  if (local) room.sendFire(event);
+  spawnAttack(event, !local);
+}
+
+function spawnAttackFromNetwork(event) {
+  spawnAttack(event, true);
+}
+
+function spawnAttack(event, ghost = false) {
+  const b = getBrawler(event.brawlerId);
+
+  if (event.kind === 'projectile') {
+    addProjectile(event, ghost);
+    ps.burst({ x: event.x, y: event.y || 0.55, z: event.z }, {
+      count: event.big ? 14 : 5,
+      color: event.color || b.accent,
+      speed: event.big ? 2.8 : 1.2,
+      life: event.big ? 0.35 : 0.14
+    });
+    return;
+  }
+
+  if (event.kind === 'cone') {
+    effects.push(new ConeSlash(scene, event.x, event.z, event.angle, event.range, event.arc, event.damage, event.color || b.accent, { ghost, delay: event.delay || 0 }));
+    return;
+  }
+
+  if (event.kind === 'area') {
+    effects.push(new ImpactArea(scene, event.x, event.z, event.radius, event.damage, event.color || b.accent, { ghost }));
+    return;
+  }
+
+  if (event.kind === 'chain') {
+    effects.push(new ChainTrap(scene, event.x, event.z, event.radius, event.damage, event.color || b.accent, { ghost, chainColor: COLORS.outline }));
+    return;
+  }
+
+  if (event.kind === 'dash' && player && !ghost) {
+    effects.push(new DashAttack(scene, player, event.angle, event.color || b.accent, { damage: event.damage, distance: event.distance, radius: event.radius }));
+    return;
+  }
+
+  if (event.kind === 'dash') {
+    effects.push(new ImpactArea(scene, event.x, event.z, event.radius || 1, 0, event.color || b.accent, { ghost: true, life: 0.35 }));
+    return;
+  }
+
+  if (event.kind === 'leap' && player && !ghost) {
+    effects.push(new LeapAttack(scene, player, event.x, event.z, event.color || b.accent, { damage: event.damage, radius: event.radius }));
+    return;
+  }
+
+  if (event.kind === 'leap') {
+    effects.push(new ImpactArea(scene, event.x, event.z, event.radius || 1.2, 0, event.color || b.accent, { ghost: true, life: 0.6 }));
+    return;
+  }
+
+  if (event.kind === 'turret') {
+    effects.push(new HealTurret(scene, event.x, event.z, event.color || b.accent));
+    return;
+  }
+
+  if (event.kind === 'stealth') {
+    ps.burst({ x: event.x, y: 0.55, z: event.z }, { count: 22, color: event.color || b.accent, speed: 2.8, life: 0.5 });
+  }
+}
+
+function launchBasic() {
+  const b = player.brawler;
+  const angle = player.aimAngle;
+  const origin = { x: player.x, z: player.z };
+
+  if (b.id === 'joao') {
+    fireEvent(projectileAtTip(angle, b, { range: 8.2, damage: 25, speed: 12.5, color: 0x48b6ff, size: 0.12, glowSize: 0.28 }));
+    return;
+  }
+
+  if (b.id === 'luan') {
+    fireEvent({ kind: 'cone', brawlerId: b.id, x: origin.x, z: origin.z, angle, range: 1.85, arc: 1.25, damage: 15, color: b.accent });
+    return;
+  }
+
+  if (b.id === 'djonga') {
+    for (let i = 0; i < 3; i++) {
+      fireEvent({ kind: 'cone', brawlerId: b.id, x: origin.x, z: origin.z, angle, range: 1.28, arc: 0.92, damage: 8, color: b.accent, delay: i * 0.11 });
+    }
+    return;
+  }
+
+  if (b.id === 'thomas') {
+    for (const off of [-0.21, -0.07, 0.07, 0.21]) {
+      fireEvent(projectileAtTip(angle + off, b, { range: 6.6, damage: 6, speed: 12.8, color: b.accent, size: 0.075, glowSize: 0.16 }));
+    }
+    return;
+  }
+
+  if (b.id === 'gui') {
+    fireEvent(projectileAtTip(angle, b, { range: 9.8, damage: 18, speed: 10.7, color: b.accent, size: 0.16, glowSize: 0.34, big: true }));
+    for (const off of [-0.38, -0.23, -0.08, 0.08, 0.23, 0.38]) {
+      fireEvent(projectileAtTip(angle + off, b, { range: 4.6, damage: 4, speed: 10.5, color: 0xff8de8, size: 0.065, glowSize: 0.14 }));
+    }
+    return;
+  }
+
+  if (b.id === 'lorenzo') {
+    for (const off of [-0.38, -0.28, -0.18, -0.08, 0, 0.08, 0.18, 0.28, 0.38]) {
+      fireEvent(projectileAtTip(angle + off, b, { range: 7, damage: 6, speed: 11.4, color: b.accent, size: 0.07, glowSize: 0.15 }));
+    }
+    return;
+  }
+
+  if (b.id === 'ministro') {
+    fireEvent(projectileAtTip(angle, b, { range: 12.5, damage: 30, speed: 13.2, color: b.accent, size: 0.095, glowSize: 0.2, pierce: true, superGain: 18 }));
+  }
+}
+
+function launchSuper() {
+  const b = player.brawler;
+  const angle = player.aimAngle;
+
+  if (b.id === 'joao') {
+    const target = aimTarget(9.4);
+    fireEvent({ kind: 'chain', brawlerId: b.id, x: target.x, z: target.z, radius: 1.15, damage: 25, color: b.accent });
+    player.useSuper();
+    shakeTimer = 0.18;
+    return;
+  }
+
+  if (b.id === 'luan') {
+    fireEvent({ kind: 'dash', brawlerId: b.id, x: player.x, z: player.z, angle, radius: 0.95, distance: 3.4, damage: 15, color: b.accent });
+    player.useSuper();
+    shakeTimer = 0.2;
+    return;
+  }
+
+  if (b.id === 'djonga') {
+    const target = aimTarget(5.8);
+    fireEvent({ kind: 'leap', brawlerId: b.id, x: target.x, z: target.z, radius: 1.35, damage: 22, color: b.accent });
+    player.useSuper();
+    shakeTimer = 0.24;
+    return;
+  }
+
+  if (b.id === 'thomas') {
+    player.startStealth(4.2);
+    fireEvent({ kind: 'stealth', brawlerId: b.id, x: player.x, z: player.z, color: b.accent });
+    player.useSuper();
+    return;
+  }
+
+  if (b.id === 'gui') {
+    fireEvent(projectileAtTip(angle, b, { range: 11.5, damage: 18, speed: 15, color: b.accent, size: 0.22, glowSize: 0.45, big: true, pierce: true }));
+    player.useSuper();
+    shakeTimer = 0.12;
+    return;
+  }
+
+  if (b.id === 'lorenzo') {
+    const target = aimTarget(5.4);
+    fireEvent({ kind: 'turret', brawlerId: b.id, x: target.x, z: target.z, color: b.accent });
+    player.useSuper();
+    return;
+  }
+
+  if (b.id === 'ministro') {
+    const target = aimTarget(8.8);
+    fireEvent({ kind: 'area', brawlerId: b.id, x: target.x, z: target.z, radius: 1.35, damage: 30, color: b.accent });
+    player.useSuper();
+    shakeTimer = 0.16;
+  }
+}
 
 async function attemptJoin() {
   const pin = pinInput.value.trim();
@@ -180,7 +469,7 @@ async function attemptJoin() {
   joinBtn.disabled = true;
   setStatus('Conectando...', null);
   try {
-    await room.join(pin, name);
+    await room.join(pin, name, selectedBrawlerId);
     setStatus('Conectado!', 'ok');
     hudPin.textContent = pin;
   } catch (err) {
@@ -209,11 +498,14 @@ window.addEventListener('keydown', e => {
 function resetArena() {
   const sp = spawnPointFor(room.mySlot);
   scene.remove(player.root);
-  player = new Player(sp.x, sp.z, room.mySlot);
+  player = new Player(sp.x, sp.z, room.myBrawlerId || selectedBrawlerId, room.mySlot);
   scene.add(player.root);
   for (const p of projectiles) p._removeFrom(scene);
+  for (const fx of effects) if (fx.kill) fx.kill();
   projectiles = [];
+  effects = [];
   world.reset();
+  updateHudStatic();
 }
 
 function ensureNameTag(id, text) {
@@ -244,9 +536,9 @@ function positionTag(el, x, z) {
 }
 
 function updateNameTags() {
-  if (player) positionTag(ensureNameTag('__me', room.myName), player.x, player.z);
+  if (player) positionTag(ensureNameTag('__me', `${room.myName} · ${player.brawler.name}`), player.x, player.z);
   for (const [id, rp] of remotePlayers) {
-    positionTag(ensureNameTag(id, rp.name), rp.x, rp.z);
+    positionTag(ensureNameTag(id, `${rp.name} · ${rp.brawler.name}`), rp.x, rp.z);
   }
 }
 
@@ -254,28 +546,20 @@ function update(dt) {
   player.update(dt, input, world);
 
   if (input.firing && player.canFire()) {
-    const shot = player.fire();
-    projectiles.push(new Projectile(scene, shot.x, shot.y, shot.z, shot.angle, 13, 11, 1, false, false));
-    ps.burst({ x: shot.x, y: shot.y, z: shot.z }, { count: 5, color: COLORS.playerBody, speed: 1.2, life: 0.14 });
-    room.sendFire({ x: shot.x, y: shot.y, z: shot.z, angle: shot.angle, big: false });
+    player.fire();
+    launchBasic();
   }
 
   if (input.consumeSuperPress() && player.canSuper()) {
-    const baseAngle = player.aimAngle;
-    const offsets = [-0.26, -0.13, 0, 0.13, 0.26];
-    for (const off of offsets) {
-      const a = baseAngle + off;
-      const tip = player.gunPivot.localToWorld(new THREE.Vector3(0, 0, 1.02));
-      projectiles.push(new Projectile(scene, tip.x, tip.y, tip.z, a, 15, 12, 3, true, false));
-      room.sendFire({ x: tip.x, y: tip.y, z: tip.z, angle: a, big: true });
-    }
-    player.useSuper();
-    ps.burst({ x: player.x, y: 0.6, z: player.z }, { count: 26, color: COLORS.gold, speed: 3.6, life: 0.55 });
-    shakeTimer = 0.25;
+    launchSuper();
+    ps.burst({ x: player.x, y: 0.6, z: player.z }, { count: 22, color: player.brawler.accent, speed: 3.2, life: 0.5 });
   }
 
   for (const p of projectiles) p.update(dt, world, ps, player);
   projectiles = projectiles.filter(p => !p.dead);
+
+  for (const fx of effects) fx.update(dt, world, ps, player);
+  effects = effects.filter(fx => !fx.dead);
 
   world.update(dt);
   ps.update(dt);
@@ -293,6 +577,8 @@ function update(dt) {
   hudAmmoPips.forEach((el, i) => el.classList.toggle('filled', i < player.ammo));
   hudSuperFill.style.width = player.superCharge + '%';
   hudSuperBox.classList.toggle('is-ready', player.superCharge >= player.superMax);
+  hudHealthFill.style.width = `${Math.max(0, Math.min(100, (player.hp / player.hpMax) * 100))}%`;
+  hudHealthText.textContent = `${Math.round(player.hp)} / ${player.hpMax}`;
 
   updateNameTags();
 }

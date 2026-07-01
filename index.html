@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>Brawl Adapt 3D — Fase 2 · Multiplayer</title>
+<title>Brawl Adapt 3D — Fase 3 · Brawlers</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;800;900&family=DM+Sans:wght@400;500;700&display=swap" rel="stylesheet">
@@ -16,6 +16,8 @@
     <div id="hud-top-left">
       <span class="eyebrow">SALA <span id="hud-pin">----</span></span>
       <span class="eyebrow" id="hud-roster-count">1 jogador</span>
+      <span class="eyebrow" id="hud-brawler">Brawler</span>
+      <div id="hud-health"><span id="hud-health-fill"></span><b id="hud-health-text">-- / --</b></div>
       <div id="hud-ammo">
         <span class="pip filled"></span>
         <span class="pip filled"></span>
@@ -39,7 +41,14 @@
     <div class="menu-card">
       <span class="menu-eyebrow">ADAPT · INTERNO</span>
       <h1>BRAWL ADAPT</h1>
-      <p class="menu-tag">protótipo 3D — fase 2 · multiplayer com PIN</p>
+      <p class="menu-tag">protótipo 3D — fase 3 · seleção de brawlers</p>
+
+
+      <div class="brawler-select">
+        <span class="field-label">Escolha seu brawler</span>
+        <div id="brawler-grid" class="brawler-grid"></div>
+        <p id="brawler-summary" class="brawler-summary"></p>
+      </div>
 
       <div class="room-form">
         <label class="field-label" for="name-input">Seu nome</label>
@@ -61,7 +70,7 @@
         <li><b>CLIQUE</b> atirar</li>
         <li><b>ESPAÇO</b> super, quando a barra estiver cheia</li>
       </ul>
-      <span class="menu-footnote">Combine o mesmo PIN com quem for jogar junto. Ainda sem dano entre jogadores nessa fase — é só pra ver todo mundo se mexendo na mesma arena.</span>
+      <span class="menu-footnote">Combine o mesmo PIN com quem for jogar junto. Nesta fase os ataques e Supers já são jogáveis contra o cenário. Dano entre jogadores e caixas sincronizadas ficam para a próxima camada PvP.</span>
     </div>
   </div>
 

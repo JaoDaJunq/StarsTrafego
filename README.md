@@ -1,82 +1,60 @@
-# Brawl Adapt 3D — Fase 2 · Multiplayer com Supabase Realtime
+# Brawl Adapt 3D — Fase 3 · Brawlers
 
-Duas ou mais pessoas entram na mesma sala digitando o mesmo PIN e se veem
-mexendo em tempo real na mesma arena. Ainda sem dano entre jogadores — é
-sobre validar a sincronização de posição, mira e disparo visual antes de
-entrar em combate de verdade.
+Versão atualizada do protótipo com seleção de brawlers antes de entrar na sala e ataques/Supers jogáveis contra o cenário.
 
-## Rodar
+## O que entrou nesta versão
 
-Abrir o `index.html` no navegador — já vem compilado em `dist/bundle.js`.
-Pra jogar em grupo, cada pessoa abre o link do GitHub Pages e usa o mesmo
-PIN.
+- Catálogo com 7 brawlers: João, Luan, Djonga, Thomas, Gui, Lorenzo e Ministro.
+- Tela de seleção de brawler antes de criar/entrar na sala.
+- Nome do brawler no HUD e name tag.
+- Vida base por brawler no HUD.
+- Modelos visuais diferentes reaproveitando a base chibi.
+- Ataque básico e Super específicos por brawler.
+- Envio do brawler escolhido pela presença do Supabase.
+- Disparos e efeitos visuais dos brawlers também aparecem para outros jogadores online.
+- Validação simples para evitar brawler repetido na mesma sala.
 
-**Subir no GitHub Pages:** sobe tudo (incluindo a pasta `dist/`) na raiz do
-repositório e ativa o Pages em Settings → Pages, branch principal, pasta
-`/ (root)`.
+## Brawlers implementados
 
-## Como funciona a sala
+- João: rosa azul de média distância; Super de correntes em área.
+- Luan: espada em cone; Super de avanço giratório.
+- Djonga: combo de 3 socos; Super de salto com impacto.
+- Thomas: lâminas em leque; Super de invisibilidade temporária.
+- Gui: orbe mágico com fragmentos; Super de mão/orbe grande de controle visual.
+- Lorenzo: rajada larga de 9 estilhaços; Super de torreta de cura.
+- Ministro: dardo longo; Super de frasco em área.
 
-- Ao abrir o jogo, você digita seu nome e um PIN de 4 dígitos
-- **Criar sala** gera um PIN aleatório e já entra
-- **Entrar** usa o PIN que você digitar — combina esse número com quem for
-  jogar junto (por WhatsApp, por exemplo)
-- Não existe lista de salas: quem digita o mesmo PIN cai automaticamente
-  no mesmo canal. Não precisa criar nada antes — o "servidor" da sala é
-  só o canal do Supabase Realtime, não fica nada salvo
-- Cada jogador vira uma cor diferente (o modelo genérico ainda é o mesmo
-  pra todo mundo — os brawlers de verdade entram na fase 4)
+## Ressalvas mantidas
 
-## O que sincroniza nessa fase
+Esta versão ainda não implementa combate PvP autoritativo. Os ataques já existem e causam dano no cenário local, mas dano entre jogadores, cura em aliados, puxão real do Gui, prisão real do João e estado global das caixas ainda são a próxima etapa.
 
-- Posição, direção do corpo e da mira de cada jogador, ~11 vezes por
-  segundo, com suavização (interpolação) pra não ficar travando na tela
-  de quem está assistindo
-- Disparos (normal e Super) aparecem visualmente pros outros jogadores
-- Entrada e saída de jogadores da sala, com contagem ao vivo no HUD
+As caixas continuam simuladas localmente. Se um jogador quebra uma caixa, o outro jogador ainda não vê essa caixa quebrada. Essa ressalva foi mantida de propósito para resolver junto com a sincronização de combate.
 
-## O que NÃO sincroniza ainda (de propósito)
+## Como rodar
 
-- **Dano entre jogadores.** Os tiros de um jogador não acertam o outro
-  ainda — cada cliente só processa a física do próprio tiro contra o
-  cenário
-- **Estado das Caixas de Briefing.** Cada jogador simula os obstáculos
-  localmente. Se você destruir uma caixa, só você vê ela sumir — os
-  outros ainda veem ela inteira até destruírem por conta própria. Isso
-  é esperado nessa fase e vai ser resolvido junto com a sincronização de
-  combate
-- Reconexão automática caso a internet caia no meio da partida
+Abra `index.html` no navegador ou publique a pasta inteira no GitHub Pages.
 
-## Testando sozinho vs. testando em grupo
+A versão compilada está em:
 
-Pra sentir a sincronização sem precisar de outra pessoa, abre o jogo em
-duas abas (ou dois navegadores) na sua máquina, entra com o mesmo PIN nas
-duas, e anda em uma pra ver a outra se mexer.
-
-## Estrutura de arquivos (o que mudou da fase 1)
-
+```txt
+dist/bundle.js
 ```
+
+## Como editar e recompilar
+
+```bash
+npm install
+npm run build
+```
+
+Estrutura principal:
+
+```txt
 src/
-  network.js        conexão com a sala (Supabase Realtime — Presence + Broadcast)
-  brawlerMesh.js       construção do personagem, compartilhada entre local e remoto
-  player.js               agora só cuida do jogador local (input, física, tiro)
-  remotePlayer.js           jogador remoto — mesh igual, mas guiado por rede + interpolação
-  projectile.js               ganhou o modo "ghost" (tiro visual dos outros, sem colisão local)
-  main.js                       tela de sala, HUD de sala/contagem, etiquetas de nome flutuantes
+  brawlers.js       catálogo dos brawlers
+  attackEffects.js  ataques em cone, área, dash, salto, corrente e torreta
+  main.js           cena, HUD, seleção, sala, ataques e loop
+  player.js         jogador local e atributos por brawler
+  remotePlayer.js   jogador remoto com brawler sincronizado
+  network.js        Supabase Realtime com Presence + Broadcast
 ```
-
-## Sobre a credencial do Supabase
-
-A URL e a chave pública (anon/publishable key) do projeto estão embutidas
-no código-fonte (`src/network.js`). Isso é esperado e seguro pra esse tipo
-de chave — ela é feita pra ser pública, não dá acesso a nada sensível por
-si só. Como essa fase usa só Realtime (Presence + Broadcast) e nenhuma
-tabela do banco, não existe dado nenhum sendo lido ou gravado no Postgres.
-
-## Próximos passos
-
-Fase 3: fechar o elenco do time de tráfego e desenhar o ataque + Super de
-cada brawler de verdade. Fase 4: sincronizar dano de verdade entre
-jogadores (aí sim as Caixas de Briefing e o combate ficam compartilhados
-pra todo mundo).
-

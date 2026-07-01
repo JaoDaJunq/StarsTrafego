@@ -15,6 +15,7 @@ export class Room {
     this.myId = uid();
     this.myName = 'Jogador';
     this.mySlot = 0;
+    this.myBrawlerId = 'joao';
     this.joinedAt = Date.now();
 
     this.onPeerState = null;
@@ -23,8 +24,9 @@ export class Room {
     this.onStatus = null;
   }
 
-  join(pin, name) {
+  join(pin, name, brawlerId = 'joao') {
     this.myName = (name || 'Jogador').slice(0, 18);
+    this.myBrawlerId = brawlerId || 'joao';
     const channelName = 'brawl-adapt-room-' + String(pin).trim();
 
     this.channel = this.client.channel(channelName, {
@@ -62,6 +64,7 @@ export class Room {
         if (status === 'SUBSCRIBED') {
           await this.channel.track({
             name: this.myName,
+            brawlerId: this.myBrawlerId,
             joinedAt: this.joinedAt
           });
           if (!settled) {
@@ -87,7 +90,7 @@ export class Room {
       const presences = state[key];
       if (!presences || !presences.length) continue;
       const p = presences[0];
-      entries.push({ id: key, name: p.name || 'Jogador', joinedAt: p.joinedAt || 0 });
+      entries.push({ id: key, name: p.name || 'Jogador', brawlerId: p.brawlerId || 'joao', joinedAt: p.joinedAt || 0 });
     }
     entries.sort((a, b) => a.joinedAt - b.joinedAt || a.id.localeCompare(b.id));
     entries.forEach((e, i) => {

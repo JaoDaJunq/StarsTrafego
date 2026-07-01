@@ -1,33 +1,42 @@
 import { clamp, lerpAngle, resolveCircleRectXZ } from './utils.js';
 import { ARENA_W, ARENA_D } from './constants.js';
-import { buildBrawlerMesh, setMeshOpacity, GUN_TIP_LOCAL, PLAYER_RADIUS, colorForSlot } from './brawlerMesh.js';
+import { buildBrawlerMesh, setMeshOpacity, GUN_TIP_LOCAL, PLAYER_RADIUS } from './brawlerMesh.js';
+import { getBrawler, DEFAULT_BRAWLER_ID } from './brawlers.js';
 
 export class Player {
-  constructor(x, z, colorSlot = 0) {
+  constructor(x, z, brawlerId = DEFAULT_BRAWLER_ID, colorSlot = 0) {
     this.x = x;
     this.z = z;
+    this.brawler = getBrawler(brawlerId);
+    this.brawlerId = this.brawler.id;
+    this.colorSlot = colorSlot;
     this.radius = PLAYER_RADIUS;
-    this.speed = 5.6;
+    this.speed = this.brawler.speed;
     this.bodyAngle = 0;
     this.aimAngle = 0;
     this.moving = false;
     this.inBush = false;
 
+    this.hpMax = this.brawler.hp;
+    this.hp = this.hpMax;
+
     this.ammo = 3;
     this.ammoMax = 3;
     this.reloadTimer = 0;
-    this.reloadTime = 1.4;
+    this.reloadTime = this.brawler.reloadTime;
 
     this.fireCooldown = 0;
-    this.fireRate = 0.28;
+    this.fireRate = this.brawler.fireRate;
 
     this.superCharge = 0;
     this.superMax = 100;
 
     this.muzzleFlash = 0;
     this.bob = 0;
+    this.stealthTimer = 0;
+    this.spinTimer = 0;
 
-    const mesh = buildBrawlerMesh(colorForSlot(colorSlot));
+    const mesh = buildBrawlerMesh(this.brawler.color, this.brawlerId);
     this.root = mesh.root;
     this.bodyPivot = mesh.bodyPivot;
     this.gunPivot = mesh.gunPivot;
@@ -72,6 +81,8 @@ export class Player {
       }
     }
     if (this.muzzleFlash > 0) this.muzzleFlash -= dt;
+    if (this.stealthTimer > 0) this.stealthTimer -= dt;
+    if (this.spinTimer > 0) this.spinTimer -= dt;
 
     this.inBush = world.bushes.some(b => world.circleOverlapsBush(this.x, this.z, this.radius * 0.6, b));
 
@@ -81,9 +92,10 @@ export class Player {
   _syncMesh() {
     const hop = this.moving ? Math.abs(Math.sin(this.bob)) * 0.05 : 0;
     this.root.position.set(this.x, hop, this.z);
-    this.bodyPivot.rotation.y = this.bodyAngle;
+    this.bodyPivot.rotation.y = this.spinTimer > 0 ? this.bodyAngle + this.spinTimer * 28 : this.bodyAngle;
     this.gunPivot.rotation.y = this.aimAngle;
-    setMeshOpacity(this.root, this.shadowMesh, this.inBush ? 0.45 : 1);
+    const hiddenOpacity = this.stealthTimer > 0 ? 0.22 : (this.inBush ? 0.45 : 1);
+    setMeshOpacity(this.root, this.shadowMesh, hiddenOpacity);
   }
 
   tryMove(nx, nz, world) {
@@ -99,6 +111,10 @@ export class Player {
     this.z = nz;
   }
 
+  moveBy(dx, dz, world) {
+    this.tryMove(this.x + dx, this.z + dz, world);
+  }
+
   canFire() {
     return this.ammo > 0 && this.fireCooldown <= 0;
   }
@@ -107,8 +123,9 @@ export class Player {
     this.ammo--;
     this.fireCooldown = this.fireRate;
     this.muzzleFlash = 0.08;
+    this.stealthTimer = 0;
     const tip = this.gunTipWorld;
-    return { x: tip.x, y: tip.y, z: tip.z, angle: this.aimAngle };
+    return { x: tip.x, y: tip.y, z: tip.z, angle: this.aimAngle, brawlerId: this.brawlerId };
   }
 
   gainSuper(amount) {
@@ -123,6 +140,14 @@ export class Player {
     this.superCharge = 0;
   }
 
+  startStealth(seconds = 4) {
+    this.stealthTimer = seconds;
+  }
+
+  startSpin(seconds = 0.35) {
+    this.spinTimer = seconds;
+  }
+
   netState() {
     return {
       x: this.x,
@@ -130,7 +155,10 @@ export class Player {
       b: this.bodyAngle,
       a: this.aimAngle,
       m: this.moving,
-      u: this.inBush
+      u: this.inBush,
+      v: this.stealthTimer > 0,
+      r: this.brawlerId,
+      hp: this.hp
     };
   }
 }
