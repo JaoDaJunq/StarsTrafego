@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Brawl Adapt 3D — Protótipo Fase 1</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;800;900&family=DM+Sans:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div id="canvas-holder"></div>
+
+  <div id="hud">
+    <div id="hud-top-left">
+      <span class="eyebrow">PROTÓTIPO #01</span>
+      <div id="hud-ammo">
+        <span class="pip filled"></span>
+        <span class="pip filled"></span>
+        <span class="pip filled"></span>
+      </div>
+    </div>
+
+    <div id="hud-super">
+      <span class="hud-super-label">SUPER</span>
+      <div class="hud-super-track">
+        <div id="hud-super-fill"></div>
+      </div>
+    </div>
+
+    <div id="hud-controls">WASD move · mouse mira · clique atira · espaço super · R reinicia</div>
+  </div>
+
+  <div id="menu-overlay">
+    <div class="menu-card">
+      <span class="menu-eyebrow">ADAPT · INTERNO</span>
+      <h1>BRAWL ADAPT</h1>
+      <p class="menu-tag">protótipo 3D — fase 1 · sentindo o movimento e a mira</p>
+      <ul class="menu-controls">
+        <li><b>WASD</b> mover</li>
+        <li><b>MOUSE</b> mirar</li>
+        <li><b>CLIQUE</b> atirar</li>
+        <li><b>ESPAÇO</b> super, quando a barra estiver cheia</li>
+        <li><b>R</b> reinicia a arena</li>
+      </ul>
+      <button id="play-btn">ENTRAR NA ARENA</button>
+      <span class="menu-footnote">Pilares de Report bloqueiam tudo. Caixas de Briefing quebram e voltam sozinhas.</span>
+    </div>
+  </div>
+
+<script src="dist/bundle.js"></script>
+</body>
+</html>
