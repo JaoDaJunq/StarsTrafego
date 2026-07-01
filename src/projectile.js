@@ -23,6 +23,9 @@ export class Projectile {
     this.superGain = opts.superGain || null;
     this.onExpire = opts.onExpire || null;
     this.scene = scene;
+    this.targetPlayer = opts.targetPlayer || null;
+    this.onHitPlayer = opts.onHitPlayer || null;
+    this.hitPlayer = false;
 
     const geo = new THREE.SphereGeometry(this.size, 10, 8);
     const mat = new THREE.MeshBasicMaterial({ color: this.color });
@@ -51,6 +54,20 @@ export class Projectile {
       if (this.x < 0 || this.x > ARENA_W || this.z < 0 || this.z > ARENA_D) {
         this.kill(world.scene);
         return;
+      }
+
+      if (this.ghost && this.targetPlayer && !this.hitPlayer && !this.targetPlayer.isDown) {
+        const hitRadius = this.size + this.targetPlayer.radius * 0.72;
+        if (Math.hypot(this.x - this.targetPlayer.x, this.z - this.targetPlayer.z) <= hitRadius) {
+          this.hitPlayer = true;
+          if (this.onHitPlayer) {
+            this.onHitPlayer(this.damage, { x: this.x, y: this.y, z: this.z }, this);
+          }
+          if (!this.pierce) {
+            this.kill(world.scene);
+            return;
+          }
+        }
       }
 
       if (!this.ghost) {

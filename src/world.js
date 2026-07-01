@@ -42,8 +42,9 @@ export class Wall {
 }
 
 export class Crate {
-  constructor(def) {
+  constructor(def, index = 0) {
     this.type = 'crate';
+    this.id = `crate-${index}`;
     this.bounds = { x: def.x, z: def.z, w: def.w, d: def.d };
     this.label = def.label;
     this.hpMax = def.hp;
@@ -51,6 +52,7 @@ export class Crate {
     this.alive = true;
     this.respawnTimer = 0;
     this.shakeTimer = 0;
+    this.onChange = null;
     this._buildMesh(def);
   }
 
@@ -82,7 +84,7 @@ export class Crate {
     this.mesh = group;
   }
 
-  hit(point, ps, damage) {
+  hit(point, ps, damage, opts = {}) {
     this.hp -= damage || 1;
     this.shakeTimer = 0.22;
     ps.burst(point, { color: COLORS.crateWood, count: 10, speed: 2.8, life: 0.45, cube: true });
@@ -94,9 +96,35 @@ export class Crate {
       ps.burst({ x: this.bounds.x, y: 0.5, z: this.bounds.z }, {
         color: COLORS.gold, count: 22, speed: 3.6, life: 0.6, cube: true
       });
-      return { destroyed: true, superGain: 26 };
+      const result = { destroyed: true, superGain: 26 };
+      if (!opts.silent && this.onChange) this.onChange(this, point, result);
+      return result;
     }
-    return { destroyed: false, superGain: 16 };
+    const result = { destroyed: false, superGain: 16 };
+    if (!opts.silent && this.onChange) this.onChange(this, point, result);
+    return result;
+  }
+
+  applyState(state, ps) {
+    const wasAlive = this.alive;
+    if (typeof state.hp === 'number') this.hp = Math.max(0, Math.min(this.hpMax, state.hp));
+    if (typeof state.alive === 'boolean') this.alive = state.alive;
+    if (typeof state.respawnTimer === 'number') this.respawnTimer = Math.max(0, state.respawnTimer);
+    this.mesh.visible = this.alive;
+    if (!wasAlive && this.alive) {
+      this.hp = this.hpMax;
+      this.shakeTimer = 0;
+      this.mesh.rotation.y = 0;
+    }
+    if (ps && state.hitX !== undefined && state.hitZ !== undefined) {
+      ps.burst({ x: state.hitX, y: state.hitY || 0.45, z: state.hitZ }, {
+        color: state.destroyed ? COLORS.gold : COLORS.crateWood,
+        count: state.destroyed ? 18 : 8,
+        speed: state.destroyed ? 3.2 : 2.2,
+        life: state.destroyed ? 0.55 : 0.35,
+        cube: true
+      });
+    }
   }
 
   update(dt) {
@@ -160,7 +188,7 @@ export function buildWorld(scene) {
   scene.add(groundMesh);
 
   const walls = OBSTACLES.filter(o => o.type === 'wall').map(o => new Wall(o));
-  const crates = OBSTACLES.filter(o => o.type === 'crate').map(o => new Crate(o));
+  const crates = OBSTACLES.filter(o => o.type === 'crate').map((o, i) => new Crate(o, i));
   const bushDefs = OBSTACLES.filter(o => o.type === 'bush');
 
   for (const w of walls) scene.add(w.mesh);
@@ -168,16 +196,28 @@ export function buildWorld(scene) {
   for (const b of bushDefs) buildBush(b, scene);
 
   const blockers = [...walls, ...crates];
+  const crateMap = new Map(crates.map(c => [c.id, c]));
 
-  return {
+  const world = {
     scene,
     groundMesh,
     walls,
     crates,
+    crateMap,
     blockers,
+    onCrateChange: null,
     bushes: bushDefs,
     circleOverlapsBush(cx, cz, cr, b) {
       return circleRectOverlapXZ(cx, cz, cr, b);
+    },
+    applyCrateState(state, ps) {
+      const crate = crateMap.get(state.id);
+      if (!crate) return;
+      crate.applyState(state, ps);
+    },
+    syncCrate(crate, point, result) {
+      if (!this.onCrateChange) return;
+      this.onCrateChange(crate, point, result);
     },
     update(dt) {
       for (const c of crates) c.update(dt);
@@ -193,4 +233,10 @@ export function buildWorld(scene) {
       }
     }
   };
+
+  for (const c of crates) {
+    c.onChange = (crate, point, result) => world.syncCrate(crate, point, result);
+  }
+
+  return world;
 }

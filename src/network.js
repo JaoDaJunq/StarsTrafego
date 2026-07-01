@@ -20,6 +20,8 @@ export class Room {
 
     this.onPeerState = null;
     this.onPeerFire = null;
+    this.onWorldEvent = null;
+    this.onCombatEvent = null;
     this.onRosterChange = null;
     this.onStatus = null;
   }
@@ -44,6 +46,16 @@ export class Room {
     this.channel.on('broadcast', { event: 'fire' }, ({ payload }) => {
       if (payload.id === this.myId) return;
       this.onPeerFire && this.onPeerFire(payload);
+    });
+
+    this.channel.on('broadcast', { event: 'world' }, ({ payload }) => {
+      if (payload.id === this.myId) return;
+      this.onWorldEvent && this.onWorldEvent(payload);
+    });
+
+    this.channel.on('broadcast', { event: 'combat' }, ({ payload }) => {
+      if (payload.id === this.myId) return;
+      this.onCombatEvent && this.onCombatEvent(payload);
     });
 
     this.channel.on('presence', { event: 'sync' }, () => {
@@ -114,6 +126,24 @@ export class Room {
     this.channel.send({
       type: 'broadcast',
       event: 'fire',
+      payload: { id: this.myId, ...data }
+    });
+  }
+
+  sendWorld(data) {
+    if (!this.channel) return;
+    this.channel.send({
+      type: 'broadcast',
+      event: 'world',
+      payload: { id: this.myId, ...data }
+    });
+  }
+
+  sendCombat(data) {
+    if (!this.channel) return;
+    this.channel.send({
+      type: 'broadcast',
+      event: 'combat',
       payload: { id: this.myId, ...data }
     });
   }

@@ -34,6 +34,21 @@ function angleDiff(a, b) {
   return Math.atan2(Math.sin(a - b), Math.cos(a - b));
 }
 
+function playerInArea(player, x, z, radius) {
+  if (!player || player.isDown) return false;
+  return Math.hypot(player.x - x, player.z - z) <= radius + player.radius * 0.72;
+}
+
+function playerInCone(player, x, z, angle, range, arc) {
+  if (!player || player.isDown) return false;
+  const dx = player.x - x;
+  const dz = player.z - z;
+  const dist = Math.hypot(dx, dz);
+  if (dist > range + player.radius * 0.72) return false;
+  const a = Math.atan2(dx, dz);
+  return Math.abs(angleDiff(a, angle)) <= arc * 0.5;
+}
+
 function applyConeDamage(world, ps, player, x, z, angle, range, arc, damage, gain = 10, color = COLORS.gold) {
   for (const o of world.blockers) {
     if (o.alive === false) continue;
@@ -81,6 +96,8 @@ export class ConeSlash {
     this.hit = false;
     this.ghost = !!opts.ghost;
     this.superGain = opts.superGain || 10;
+    this.targetPlayer = opts.targetPlayer || null;
+    this.onHitPlayer = opts.onHitPlayer || null;
     this.mesh = buildConeMesh(range, arc, color);
     this.mesh.position.set(x, 0.035, z);
     this.mesh.rotation.z = -angle;
@@ -94,8 +111,12 @@ export class ConeSlash {
       if (this.delay <= 0) this.mesh.visible = true;
       return;
     }
-    if (!this.hit && !this.ghost) {
-      applyConeDamage(world, ps, player, this.x, this.z, this.angle, this.range, this.arc, this.damage, this.superGain, this.color);
+    if (!this.hit) {
+      if (!this.ghost) {
+        applyConeDamage(world, ps, player, this.x, this.z, this.angle, this.range, this.arc, this.damage, this.superGain, this.color);
+      } else if (this.targetPlayer && playerInCone(this.targetPlayer, this.x, this.z, this.angle, this.range, this.arc)) {
+        this.onHitPlayer && this.onHitPlayer(this.damage, { x: this.targetPlayer.x, y: 0.55, z: this.targetPlayer.z }, this);
+      }
       this.hit = true;
     }
     this.life -= dt;
@@ -124,6 +145,9 @@ export class ImpactArea {
     this.delay = opts.delay || 0;
     this.ghost = !!opts.ghost;
     this.superGain = opts.superGain || 18;
+    this.targetPlayer = opts.targetPlayer || null;
+    this.onHitPlayer = opts.onHitPlayer || null;
+    this.hitEffect = opts.hitEffect || null;
     this.hit = false;
 
     const geo = new THREE.CircleGeometry(radius, 40);
@@ -140,8 +164,12 @@ export class ImpactArea {
       if (this.delay <= 0) this.mesh.visible = true;
       return;
     }
-    if (!this.hit && !this.ghost) {
-      applyAreaDamage(world, ps, player, this.x, this.z, this.radius, this.damage, this.superGain, this.color);
+    if (!this.hit) {
+      if (!this.ghost) {
+        applyAreaDamage(world, ps, player, this.x, this.z, this.radius, this.damage, this.superGain, this.color);
+      } else if (this.targetPlayer && playerInArea(this.targetPlayer, this.x, this.z, this.radius)) {
+        this.onHitPlayer && this.onHitPlayer(this.damage, { x: this.targetPlayer.x, y: 0.55, z: this.targetPlayer.z }, this);
+      }
       this.hit = true;
     }
     this.life -= dt;

@@ -17,6 +17,9 @@ export class RemotePlayer {
     this.moving = false;
     this.inBush = false;
     this.stealth = false;
+    this.isDown = false;
+    this.hpMax = this.brawler.hp;
+    this.hp = this.hpMax;
     this.bob = 0;
 
     this.targetX = 0;
@@ -43,6 +46,8 @@ export class RemotePlayer {
     const oldRoot = this.root;
     this.brawlerId = brawlerId;
     this.brawler = getBrawler(brawlerId);
+    this.hpMax = this.brawler.hp;
+    this.hp = Math.min(this.hp || this.hpMax, this.hpMax);
     this._buildMesh();
     this.root.position.set(this.x, 0, this.z);
     if (scene) {
@@ -64,6 +69,8 @@ export class RemotePlayer {
     this.moving = !!state.m;
     this.inBush = !!state.u;
     this.stealth = !!state.v;
+    if (typeof state.hp === 'number') this.hp = Math.max(0, Math.min(this.hpMax, state.hp));
+    this.isDown = !!state.d;
     this.lastSeen = performance.now();
 
     if (!this.hasData) {
@@ -96,8 +103,14 @@ export class RemotePlayer {
     this.root.position.set(this.x, hop, this.z);
     this.bodyPivot.rotation.y = this.bodyAngle;
     this.gunPivot.rotation.y = this.aimAngle;
-    const opacity = this.stealth ? 0.22 : (this.inBush ? 0.4 : 1);
+    const opacity = this.isDown ? 0.28 : (this.stealth ? 0.22 : (this.inBush ? 0.4 : 1));
     setMeshOpacity(this.root, this.shadowMesh, opacity);
+    this.root.scale.setScalar(this.isDown ? 0.82 : 1);
+  }
+
+  applyHealth(hp, down = false) {
+    if (typeof hp === 'number') this.hp = Math.max(0, Math.min(this.hpMax, hp));
+    this.isDown = !!down;
   }
 
   dispose(scene) {

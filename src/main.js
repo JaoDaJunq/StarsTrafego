@@ -94,6 +94,19 @@ scene.add(fill);
 
 const world = buildWorld(scene);
 world.scene = scene;
+world.onCrateChange = (crate, point, result) => {
+  room.sendWorld({
+    type: 'crate_state',
+    id: crate.id,
+    hp: crate.hp,
+    alive: crate.alive,
+    respawnTimer: crate.respawnTimer,
+    destroyed: !!result?.destroyed,
+    hitX: point?.x ?? crate.bounds.x,
+    hitY: point?.y ?? 0.45,
+    hitZ: point?.z ?? crate.bounds.z
+  });
+};
 const input = new Input(renderer.domElement, camera, world.groundMesh);
 const ps = new ParticleSystem(scene);
 
@@ -172,6 +185,78 @@ function aimTarget(maxRange) {
   };
 }
 
+function pointSegmentDistance(px, pz, ax, az, bx, bz) {
+  const dx = bx - ax;
+  const dz = bz - az;
+  const lenSq = dx * dx + dz * dz || 1;
+  const t = Math.max(0, Math.min(1, ((px - ax) * dx + (pz - az) * dz) / lenSq));
+  const x = ax + dx * t;
+  const z = az + dz * t;
+  return Math.hypot(px - x, pz - z);
+}
+
+function broadcastHealth(reason = 'state') {
+  if (!player) return;
+  room.sendCombat({
+    type: 'health',
+    targetId: room.myId,
+    hp: player.hp,
+    hpMax: player.hpMax,
+    down: player.isDown,
+    brawlerId: player.brawlerId,
+    reason
+  });
+}
+
+function applyIncomingDamage(amount, point, event = {}) {
+  if (!player || player.isDown) return;
+
+  if (event.pull && event.pullToX !== undefined && event.pullToZ !== undefined) {
+    const dx = event.pullToX - player.x;
+    const dz = event.pullToZ - player.z;
+    const len = Math.hypot(dx, dz) || 1;
+    const pullDist = Math.min(len, event.pullDistance || 2.8);
+    player.tryMove(player.x + (dx / len) * pullDist, player.z + (dz / len) * pullDist, world);
+    player.root(0.45);
+  }
+
+  const rootTime = event.kind === 'chain' ? 1.35 : 0;
+  const result = player.takeDamage(amount || 0, { root: rootTime });
+  if (!result.changed) return;
+
+  ps.burst({ x: point.x, y: point.y || 0.55, z: point.z }, {
+    count: result.downed ? 28 : 12,
+    color: result.downed ? COLORS.crimson : (event.color || COLORS.gold),
+    speed: result.downed ? 4 : 2.6,
+    life: result.downed ? 0.7 : 0.38,
+    cube: result.downed
+  });
+  shakeTimer = Math.max(shakeTimer, result.downed ? 0.26 : 0.1);
+  broadcastHealth(result.downed ? 'downed' : 'damage');
+}
+
+function incomingEffectOpts(event, ghost) {
+  if (!ghost) return { ghost: false, delay: event.delay || 0 };
+  return {
+    ghost: true,
+    delay: event.delay || 0,
+    targetPlayer: player,
+    onHitPlayer: (damage, point) => applyIncomingDamage(damage, point, event)
+  };
+}
+
+function applyIncomingDash(event) {
+  if (!player || player.isDown) return;
+  const sx = event.x;
+  const sz = event.z;
+  const ex = sx + Math.sin(event.angle) * (event.distance || 3.2);
+  const ez = sz + Math.cos(event.angle) * (event.distance || 3.2);
+  const dist = pointSegmentDistance(player.x, player.z, sx, sz, ex, ez);
+  if (dist <= (event.radius || 0.9) + player.radius * 0.72) {
+    applyIncomingDamage(event.damage || 0, { x: player.x, y: 0.55, z: player.z }, event);
+  }
+}
+
 function startGame() {
   const sp = spawnPointFor(room.mySlot);
   player = new Player(sp.x, sp.z, room.myBrawlerId || selectedBrawlerId, room.mySlot);
@@ -242,6 +327,21 @@ room.onPeerFire = payload => {
   spawnAttackFromNetwork(payload);
 };
 
+room.onWorldEvent = payload => {
+  if (payload.type === 'crate_state') {
+    world.applyCrateState(payload, ps);
+  } else if (payload.type === 'world_reset') {
+    world.reset();
+  }
+};
+
+room.onCombatEvent = payload => {
+  if (payload.type === 'health') {
+    const rp = remotePlayers.get(payload.targetId || payload.id);
+    if (rp) rp.applyHealth(payload.hp, payload.down);
+  }
+};
+
 function addProjectile(data, ghost = false) {
   projectiles.push(new Projectile(
     scene,
@@ -259,7 +359,9 @@ function addProjectile(data, ghost = false) {
       size: data.size,
       glowSize: data.glowSize,
       pierce: data.pierce,
-      superGain: data.superGain
+      superGain: data.superGain,
+      targetPlayer: ghost ? player : null,
+      onHitPlayer: ghost ? ((damage, point) => applyIncomingDamage(damage, point, data)) : null
     }
   ));
 }
@@ -281,7 +383,11 @@ function projectileAtTip(angle, brawler, params = {}) {
     glowSize: params.glowSize ?? 0.2,
     big: !!params.big,
     pierce: !!params.pierce,
-    superGain: params.superGain
+    superGain: params.superGain,
+    pull: !!params.pull,
+    pullToX: params.pullToX,
+    pullToZ: params.pullToZ,
+    pullDistance: params.pullDistance
   };
 }
 
@@ -309,17 +415,17 @@ function spawnAttack(event, ghost = false) {
   }
 
   if (event.kind === 'cone') {
-    effects.push(new ConeSlash(scene, event.x, event.z, event.angle, event.range, event.arc, event.damage, event.color || b.accent, { ghost, delay: event.delay || 0 }));
+    effects.push(new ConeSlash(scene, event.x, event.z, event.angle, event.range, event.arc, event.damage, event.color || b.accent, incomingEffectOpts(event, ghost)));
     return;
   }
 
   if (event.kind === 'area') {
-    effects.push(new ImpactArea(scene, event.x, event.z, event.radius, event.damage, event.color || b.accent, { ghost }));
+    effects.push(new ImpactArea(scene, event.x, event.z, event.radius, event.damage, event.color || b.accent, incomingEffectOpts(event, ghost)));
     return;
   }
 
   if (event.kind === 'chain') {
-    effects.push(new ChainTrap(scene, event.x, event.z, event.radius, event.damage, event.color || b.accent, { ghost, chainColor: COLORS.outline }));
+    effects.push(new ChainTrap(scene, event.x, event.z, event.radius, event.damage, event.color || b.accent, { ...incomingEffectOpts(event, ghost), chainColor: COLORS.outline }));
     return;
   }
 
@@ -330,6 +436,7 @@ function spawnAttack(event, ghost = false) {
 
   if (event.kind === 'dash') {
     effects.push(new ImpactArea(scene, event.x, event.z, event.radius || 1, 0, event.color || b.accent, { ghost: true, life: 0.35 }));
+    if (ghost) applyIncomingDash(event);
     return;
   }
 
@@ -339,7 +446,7 @@ function spawnAttack(event, ghost = false) {
   }
 
   if (event.kind === 'leap') {
-    effects.push(new ImpactArea(scene, event.x, event.z, event.radius || 1.2, 0, event.color || b.accent, { ghost: true, life: 0.6 }));
+    effects.push(new ImpactArea(scene, event.x, event.z, event.radius || 1.2, event.damage || 0, event.color || b.accent, { ...incomingEffectOpts(event, ghost), life: 0.6 }));
     return;
   }
 
@@ -437,7 +544,7 @@ function launchSuper() {
   }
 
   if (b.id === 'gui') {
-    fireEvent(projectileAtTip(angle, b, { range: 11.5, damage: 18, speed: 15, color: b.accent, size: 0.22, glowSize: 0.45, big: true, pierce: true }));
+    fireEvent(projectileAtTip(angle, b, { range: 11.5, damage: 8, speed: 15, color: b.accent, size: 0.22, glowSize: 0.45, big: true, pierce: true, pull: true, pullToX: player.x, pullToZ: player.z, pullDistance: 3.1 }));
     player.useSuper();
     shakeTimer = 0.12;
     return;
@@ -505,6 +612,7 @@ function resetArena() {
   projectiles = [];
   effects = [];
   world.reset();
+  room.sendWorld({ type: 'world_reset' });
   updateHudStatic();
 }
 
@@ -536,9 +644,9 @@ function positionTag(el, x, z) {
 }
 
 function updateNameTags() {
-  if (player) positionTag(ensureNameTag('__me', `${room.myName} · ${player.brawler.name}`), player.x, player.z);
+  if (player) positionTag(ensureNameTag('__me', `${room.myName} · ${player.brawler.name} · ${Math.round(player.hp)}/${player.hpMax}${player.isDown ? ' · CAÍDO' : ''}`), player.x, player.z);
   for (const [id, rp] of remotePlayers) {
-    positionTag(ensureNameTag(id, `${rp.name} · ${rp.brawler.name}`), rp.x, rp.z);
+    positionTag(ensureNameTag(id, `${rp.name} · ${rp.brawler.name} · ${Math.round(rp.hp)}/${rp.hpMax}${rp.isDown ? ' · CAÍDO' : ''}`), rp.x, rp.z);
   }
 }
 

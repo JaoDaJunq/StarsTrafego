@@ -1,6 +1,6 @@
-# Brawl Adapt 3D — Fase 3 · Brawlers
+# Brawl Adapt 3D — Fase 4 · Sincronização PvP
 
-Versão atualizada do protótipo com seleção de brawlers antes de entrar na sala e ataques/Supers jogáveis contra o cenário.
+Versão atualizada do protótipo com seleção de brawlers, ataques/Supers jogáveis e primeira camada de sincronização PvP via Supabase Realtime.
 
 ## O que entrou nesta versão
 
@@ -13,6 +13,11 @@ Versão atualizada do protótipo com seleção de brawlers antes de entrar na sa
 - Envio do brawler escolhido pela presença do Supabase.
 - Disparos e efeitos visuais dos brawlers também aparecem para outros jogadores online.
 - Validação simples para evitar brawler repetido na mesma sala.
+- Sincronização de caixas quebradas/danificadas entre os jogadores conectados.
+- Dano entre jogadores calculado por quem recebe o ataque.
+- Vida, queda/nocaute e respawn simples sincronizados pelo estado de rede.
+- Corrente do João prende o jogador atingido por um curto período.
+- Super do Gui agora puxa o alvo atingido no cliente de quem recebeu o golpe.
 
 ## Brawlers implementados
 
@@ -26,9 +31,11 @@ Versão atualizada do protótipo com seleção de brawlers antes de entrar na sa
 
 ## Ressalvas mantidas
 
-Esta versão ainda não implementa combate PvP autoritativo. Os ataques já existem e causam dano no cenário local, mas dano entre jogadores, cura em aliados, puxão real do Gui, prisão real do João e estado global das caixas ainda são a próxima etapa.
+Esta versão ainda não é um servidor autoritativo de jogo. O PvP funciona no modelo peer-authoritative: cada cliente calcula se o próprio jogador foi atingido pelos ataques recebidos pela rede. Para protótipo/teste interno isso já permite combate online, mas em uma versão competitiva real o ideal seria mover autoridade de dano, vida, caixas e respawn para um servidor.
 
-As caixas continuam simuladas localmente. Se um jogador quebra uma caixa, o outro jogador ainda não vê essa caixa quebrada. Essa ressalva foi mantida de propósito para resolver junto com a sincronização de combate.
+A sincronização das caixas agora existe durante a sala, mas ainda não há persistência de estado para quem entra atrasado. Se alguém entrar depois de uma caixa já ter sido quebrada, pode ver a arena inicial até novos eventos de sincronização acontecerem.
+
+Cura em aliados e times ainda não foram modelados. A torreta do Lorenzo cura o próprio jogador local e o estado de vida atualizado é enviado aos demais.
 
 ## Como rodar
 

@@ -35,6 +35,10 @@ export class Player {
     this.bob = 0;
     this.stealthTimer = 0;
     this.spinTimer = 0;
+    this.rootedTimer = 0;
+    this.invulnTimer = 0;
+    this.isDown = false;
+    this.respawnTimer = 0;
 
     const mesh = buildBrawlerMesh(this.brawler.color, this.brawlerId);
     this.root = mesh.root;
@@ -48,12 +52,33 @@ export class Player {
   }
 
   update(dt, input, world) {
+    if (this.invulnTimer > 0) this.invulnTimer -= dt;
+    if (this.rootedTimer > 0) this.rootedTimer -= dt;
+
+    if (this.isDown) {
+      this.respawnTimer -= dt;
+      this.fireCooldown = Math.max(this.fireCooldown, 0.2);
+      this.moving = false;
+      if (this.respawnTimer <= 0) {
+        this.isDown = false;
+        this.hp = this.hpMax;
+        this.invulnTimer = 1.1;
+      }
+      this._syncMesh();
+      return;
+    }
+
     let mx = 0;
     let mz = 0;
     if (input.keys.has('w') || input.keys.has('arrowup')) mz -= 1;
     if (input.keys.has('s') || input.keys.has('arrowdown')) mz += 1;
     if (input.keys.has('a') || input.keys.has('arrowleft')) mx -= 1;
     if (input.keys.has('d') || input.keys.has('arrowright')) mx += 1;
+
+    if (this.rootedTimer > 0) {
+      mx = 0;
+      mz = 0;
+    }
 
     this.moving = mx !== 0 || mz !== 0;
     if (this.moving) {
@@ -94,8 +119,9 @@ export class Player {
     this.root.position.set(this.x, hop, this.z);
     this.bodyPivot.rotation.y = this.spinTimer > 0 ? this.bodyAngle + this.spinTimer * 28 : this.bodyAngle;
     this.gunPivot.rotation.y = this.aimAngle;
-    const hiddenOpacity = this.stealthTimer > 0 ? 0.22 : (this.inBush ? 0.45 : 1);
+    const hiddenOpacity = this.isDown ? 0.28 : (this.stealthTimer > 0 ? 0.22 : (this.inBush ? 0.45 : 1));
     setMeshOpacity(this.root, this.shadowMesh, hiddenOpacity);
+    this.root.scale.setScalar(this.isDown ? 0.82 : (this.invulnTimer > 0 ? 1 + Math.sin(this.invulnTimer * 24) * 0.035 : 1));
   }
 
   tryMove(nx, nz, world) {
@@ -116,7 +142,7 @@ export class Player {
   }
 
   canFire() {
-    return this.ammo > 0 && this.fireCooldown <= 0;
+    return !this.isDown && this.rootedTimer <= 0.05 && this.ammo > 0 && this.fireCooldown <= 0;
   }
 
   fire() {
@@ -133,7 +159,7 @@ export class Player {
   }
 
   canSuper() {
-    return this.superCharge >= this.superMax;
+    return !this.isDown && this.superCharge >= this.superMax;
   }
 
   useSuper() {
@@ -148,6 +174,31 @@ export class Player {
     this.spinTimer = seconds;
   }
 
+  root(seconds = 1.1) {
+    if (this.isDown) return;
+    this.rootedTimer = Math.max(this.rootedTimer, seconds);
+  }
+
+  takeDamage(amount, opts = {}) {
+    if (this.isDown || this.invulnTimer > 0 || amount <= 0) return { changed: false, downed: false };
+    this.hp = Math.max(0, this.hp - amount);
+    const downed = this.hp <= 0;
+    if (opts.root) this.root(opts.root);
+    if (downed) {
+      this.isDown = true;
+      this.respawnTimer = opts.respawnTime || 2.8;
+      this.stealthTimer = 0;
+      this.rootedTimer = 0;
+    }
+    return { changed: true, downed };
+  }
+
+  heal(amount) {
+    if (this.isDown || amount <= 0 || this.hp >= this.hpMax) return false;
+    this.hp = Math.min(this.hpMax, this.hp + amount);
+    return true;
+  }
+
   netState() {
     return {
       x: this.x,
@@ -158,7 +209,9 @@ export class Player {
       u: this.inBush,
       v: this.stealthTimer > 0,
       r: this.brawlerId,
-      hp: this.hp
+      hp: this.hp,
+      d: this.isDown,
+      rt: this.rootedTimer > 0
     };
   }
 }
