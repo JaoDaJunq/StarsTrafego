@@ -12,7 +12,8 @@ export const BRAWLERS = [
     fireRate: 0.9,
     damage: 25,
     attack: 'Rosa azul de média distância',
-    super: 'Prisão de correntes em área'
+    super: 'Prisão de correntes em área',
+    portrait: 'assets/portraits/joao-chain-rose.png'
   },
   {
     id: 'luan',
@@ -27,7 +28,8 @@ export const BRAWLERS = [
     fireRate: 0.54,
     damage: 15,
     attack: 'Corte de espada em cone',
-    super: 'Avanço giratório em área'
+    super: 'Avanço giratório em área',
+    portrait: 'assets/portraits/luan-blade-dash.png'
   },
   {
     id: 'djonga',
@@ -42,7 +44,8 @@ export const BRAWLERS = [
     fireRate: 0.42,
     damage: 8,
     attack: 'Sequência de 3 socos',
-    super: 'Salto com impacto na aterrissagem'
+    super: 'Salto com impacto na aterrissagem',
+    portrait: 'assets/portraits/djonga-combo-strike.png'
   },
   {
     id: 'thomas',
@@ -57,7 +60,8 @@ export const BRAWLERS = [
     fireRate: 0.5,
     damage: 6,
     attack: '4 lâminas em leque',
-    super: 'Invisibilidade temporária'
+    super: 'Invisibilidade temporária',
+    portrait: 'assets/portraits/thomas-phantom-stealth.png'
   },
   {
     id: 'gui',
@@ -72,7 +76,8 @@ export const BRAWLERS = [
     fireRate: 1.1,
     damage: 18,
     attack: 'Orbe mágico de longo alcance',
-    super: 'Mão mágica de controle'
+    super: 'Mão mágica de controle',
+    portrait: 'assets/portraits/gui-arcane-control.png'
   },
   {
     id: 'lorenzo',
@@ -87,7 +92,8 @@ export const BRAWLERS = [
     fireRate: 0.5,
     damage: 6,
     attack: 'Rajada larga de 9 estilhaços',
-    super: 'Torreta de cura em área'
+    super: 'Torreta de cura em área',
+    portrait: 'assets/portraits/lorenzo-field-support.png'
   },
   {
     id: 'ministro',
@@ -102,7 +108,8 @@ export const BRAWLERS = [
     fireRate: 0.55,
     damage: 30,
     attack: 'Dardo de longo alcance com efeito contínuo',
-    super: 'Frasco lançado em área'
+    super: 'Frasco lançado em área',
+    portrait: 'assets/portraits/ministro-tactical-elixir.png'
   }
 ];
 
